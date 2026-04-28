@@ -19,5 +19,5 @@
     "rootDir": "."
   },
   "include": ["src/**/*.ts", "tests/**/*.ts", "schemas/**/*.json"],
-  "exclude": ["dist", "node_modules", ".swarm", "demo/.output", "demo/.vinxi"]
+  "exclude": ["dist", "node_modules", ".swarm"]
 }

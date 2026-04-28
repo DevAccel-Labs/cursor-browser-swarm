@@ -8,10 +8,7 @@
   "ignorePatterns": [
     "dist/**",
     ".swarm/**",
-    ".swarm-worktrees/**",
-    "demo/.vinxi/**",
-    "demo/.output/**",
-    "demo/node_modules/**"
+    ".swarm-worktrees/**"
   ],
   "rules": {
     "no-console": "off",
