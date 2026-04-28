@@ -1,0 +1,45 @@
+{
+  "name": "cursor-browser-swarm",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Parallel browser validation for Cursor agents.",
+  "bin": {
+    "cursor-browser-swarm": "./dist/cli.js",
+    "cursor-swarm": "./dist/cli.js"
+  },
+  "type": "module",
+  "scripts": {
+    "build": "tsgo --noEmit && tsup src/cli.ts --format esm --dts --sourcemap && node scripts/fix-cli-shebang.mjs",
+    "typecheck": "tsgo --noEmit",
+    "test": "vitest run",
+    "lint": "oxlint --react-plugin --import-plugin --jsx-a11y-plugin --vitest-plugin .",
+    "format": "oxfmt .",
+    "format:check": "oxfmt --check .",
+    "demo:dev": "bun run --cwd demo dev",
+    "demo:swarm": "bun run build && bun run cursor-browser-swarm run --repo ./demo --no-dev-server --base-url http://localhost:3000 --routes ./demo/swarm.routes.json --agents 4 --mode dry-run",
+    "benchmark:aggregate": "node scripts/aggregate-benchmarks.mjs",
+    "mcp": "bun run src/mcp/server.ts",
+    "cursor-browser-swarm": "bun run src/cli.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "commander": "^14.0.3",
+    "execa": "^9.6.1",
+    "picocolors": "^1.1.1",
+    "playwright": "^1.59.1",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "@typescript/native-preview": "^7.0.0-dev.20260427.1",
+    "oxfmt": "^0.47.0",
+    "oxlint": "^1.62.0",
+    "tsup": "^8.5.1",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.5"
+  },
+  "engines": {
+    "bun": ">=1.1.0",
+    "node": ">=22.0.0"
+  }
+}

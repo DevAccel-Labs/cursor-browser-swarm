@@ -1,0 +1,16 @@
+node_modules
+dist
+coverage
+.env
+.env.local
+.swarm
+.swarm-worktrees
+playwright-report
+test-results
+*.tsbuildinfo
+
+# Demo app
+demo/.vinxi
+demo/.output
+demo/dist
+demo/node_modules

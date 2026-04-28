@@ -1,0 +1,18 @@
+{
+  "appName": "Demo SaaS App",
+  "baseUrl": "http://localhost:3000",
+  "routes": [
+    {
+      "path": "/dashboard",
+      "goal": "Click through dashboard cards, filters, empty states, and navigation links."
+    },
+    {
+      "path": "/projects/acme/tickets",
+      "goal": "Test ticket table sorting, filters, row opening, create-ticket modal, and pagination."
+    },
+    {
+      "path": "/settings/team",
+      "goal": "Test invite modal, role dropdowns, validation errors, and save/cancel behavior."
+    }
+  ]
+}

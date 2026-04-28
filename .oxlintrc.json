@@ -1,0 +1,20 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "env": {
+    "node": true,
+    "browser": true,
+    "es2024": true
+  },
+  "ignorePatterns": [
+    "dist/**",
+    ".swarm/**",
+    ".swarm-worktrees/**",
+    "demo/.vinxi/**",
+    "demo/.output/**",
+    "demo/node_modules/**"
+  ],
+  "rules": {
+    "no-console": "off",
+    "typescript/no-explicit-any": "warn"
+  }
+}
