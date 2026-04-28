@@ -16,6 +16,14 @@ export class DryRunCursorAgentClient implements CursorAgentClient {
   async createRun(input: CreateRunInput): Promise<CreateRunResult> {
     const runId = `${input.agentId}-dry-run`;
     statuses.set(runId, { runId, status: "running" });
+    if (input.signal?.aborted) {
+      statuses.set(runId, { runId, status: "cancelled" });
+      return {
+        runId,
+        status: "cancelled",
+        startedAt: new Date().toISOString(),
+      };
+    }
     const browserResult = await runBrowserScenario({
       agentId: input.agentId,
       assignment: input.assignment,
@@ -23,9 +31,21 @@ export class DryRunCursorAgentClient implements CursorAgentClient {
       artifactPaths: input.artifactPaths,
       maxRouteSteps: input.maxRouteSteps,
     });
+    if (input.signal?.aborted) {
+      statuses.set(runId, { runId, status: "cancelled" });
+      return {
+        runId,
+        status: "cancelled",
+        startedAt: new Date().toISOString(),
+      };
+    }
     const manifest: EvidenceManifest = {
       version: "1",
       agentId: input.agentId,
+      agentDirective: {
+        id: input.assignment.directive.id,
+        label: input.assignment.directive.label,
+      },
       status: browserResult.findings.length > 0 ? "failed" : "passed",
       baseUrl: input.baseUrl,
       completedAt: new Date().toISOString(),

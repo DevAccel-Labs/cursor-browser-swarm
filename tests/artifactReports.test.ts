@@ -8,6 +8,7 @@ import { createRunBenchmark } from "../src/artifacts/writeBenchmarkReport.js";
 import { writeAgentReport } from "../src/artifacts/writeAgentReport.js";
 import { writeHandoffPacket } from "../src/artifacts/writeHandoffPacket.js";
 import { writeFinalReport } from "../src/artifacts/writeRunReport.js";
+import { defaultAgentDirectives } from "../src/runner/agentDirectives.js";
 import type { AgentRunReport } from "../src/types.js";
 
 function sampleReport(reportPath: string): AgentRunReport {
@@ -16,6 +17,7 @@ function sampleReport(reportPath: string): AgentRunReport {
     assignment: {
       agentId: "agent-1",
       index: 1,
+      directive: defaultAgentDirectives[0]!,
       routes: [
         { path: "/dashboard", goal: "Test dashboard", hints: [], severityFocus: ["console"] },
       ],
@@ -145,6 +147,7 @@ describe("artifact reports", () => {
       tool_failures: number;
     };
     expect(agentText).toContain("Console error observed");
+    expect(agentText).toContain("Directive: balanced (Balanced QA)");
     expect(agentText).toContain("Root-cause group: dashboard-console-error");
     expect(agentText).toContain("Fix readiness: ready");
     expect(agentText).toContain("Protocol evidence:");
@@ -203,7 +206,10 @@ describe("artifact reports", () => {
         interactiveSecrets: false,
         agents: 1,
         agentConcurrency: 1,
+        requestedAgentConcurrency: "auto",
+        agentConcurrencyMode: "auto",
         assignmentStrategy: "replicate",
+        agentDirectives: [defaultAgentDirectives[0]!],
         mode: "cursor-cli",
         runId: "run-1",
         outDir: dir,
@@ -220,25 +226,35 @@ describe("artifact reports", () => {
         lastAgentCompleteMs: 1234,
         totalWallClockMs: 1234,
         memoryPeakMb: 512,
+        systemMemoryPeakPercent: 42,
+        systemLoadPeak1m: 1.5,
         chromeProcessesSpawned: 1,
         portCollisions: 0,
         startupFailures: 0,
         profileConflicts: 0,
         tempDirCollisions: 0,
         stateBleedEvents: 0,
+        resourceSamplesPath: path.join(dir, "resource-samples.jsonl"),
+        initialConcurrency: 1,
+        maxObservedConcurrency: 1,
+        adaptiveDecisions: 0,
       },
     });
 
     expect(benchmark.config).toMatchObject({
       agents: 1,
       agent_concurrency: 1,
+      requested_agent_concurrency: "auto",
+      agent_concurrency_mode: "auto",
       axi_port_base: 31_000,
       isolation_mode: "per-agent",
     });
     expect(benchmark.resources).toMatchObject({
-      memory_peak_mb: 512,
+      orchestrator_memory_peak_mb: 512,
+      system_memory_peak_percent: 42,
       port_collisions: 0,
     });
+    expect(benchmark.adaptive.max_observed_concurrency).toBe(1);
     expect(benchmark.classification.tooling_findings).toBe(1);
   });
 

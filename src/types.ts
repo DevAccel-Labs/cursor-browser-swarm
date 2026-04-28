@@ -6,11 +6,22 @@ export type ChromeMode = "playwright" | "devtools-mcp" | "axi";
 
 export type AssignmentStrategy = "split" | "replicate";
 
+export type AgentConcurrency = number | "auto";
+
+export type AgentConcurrencyMode = "fixed" | "auto";
+
 export type SwarmSeverityFocus = "console" | "network" | "visual" | "accessibility" | "performance";
 
 export type SeverityFocus = SwarmSeverityFocus;
 
 export type RunStatusKind = "queued" | "running" | "succeeded" | "failed" | "cancelled";
+
+export interface AgentDirective {
+  id: string;
+  label: string;
+  instructions: string;
+  allowDestructiveActions: boolean;
+}
 
 export interface RouteScenario {
   path: string;
@@ -23,6 +34,7 @@ export interface RouteConfig {
   appName: string;
   baseUrl?: string | undefined;
   routes: RouteScenario[];
+  agentDirectives?: AgentDirective[] | undefined;
 }
 
 export interface SwarmSecret {
@@ -43,8 +55,10 @@ export interface SwarmCliOptions {
   secretsEnvPrefix: string;
   interactiveSecrets: boolean;
   agents: number;
-  agentConcurrency: number;
+  agentConcurrency: AgentConcurrency;
   assignmentStrategy: AssignmentStrategy;
+  agentDirectives?: AgentDirective[] | undefined;
+  agentPersonas?: string | undefined;
   mode: SwarmMode;
   runId?: string | undefined;
   outDir?: string | undefined;
@@ -76,7 +90,11 @@ export interface SwarmRunConfig {
   interactiveSecrets: boolean;
   agents: number;
   agentConcurrency: number;
+  requestedAgentConcurrency: AgentConcurrency;
+  agentConcurrencyMode: AgentConcurrencyMode;
   assignmentStrategy: AssignmentStrategy;
+  agentDirectives: AgentDirective[];
+  agentPersonas?: string | undefined;
   mode: SwarmMode;
   runId: string;
   outDir: string;
@@ -96,6 +114,7 @@ export interface AgentAssignment {
   agentId: string;
   index: number;
   routes: RouteScenario[];
+  directive: AgentDirective;
 }
 
 export interface ArtifactPaths {
@@ -107,6 +126,7 @@ export interface ArtifactPaths {
   metricsJsonPath: string;
   benchmarkJsonPath: string;
   benchmarkCsvPath: string;
+  resourceSamplesPath: string;
 }
 
 export interface AgentArtifactPaths {
@@ -140,6 +160,7 @@ export interface BrowserSession {
   axiPortConflict?: boolean;
   axiStartupMs?: number;
   axiStartupFailed?: boolean;
+  axiBridgePids?: number[];
   sessionIsolationValid?: boolean;
 }
 
@@ -286,6 +307,7 @@ export interface CreateRunInput {
   assignment: AgentAssignment;
   repoPath: string;
   runId?: string;
+  signal?: AbortSignal;
   artifactPaths: AgentArtifactPaths;
   eventsPath: string;
   missionPrompt: string;
@@ -340,6 +362,10 @@ export interface EvidenceManifestRoute {
 export interface EvidenceManifest {
   version: "1";
   agentId: string;
+  agentDirective?: {
+    id: string;
+    label: string;
+  };
   status: "passed" | "failed" | "blocked";
   baseUrl: string;
   startedAt?: string;
@@ -398,6 +424,8 @@ export interface RunBenchmark {
   config: {
     agents: number;
     agent_concurrency: number;
+    requested_agent_concurrency: AgentConcurrency;
+    agent_concurrency_mode: AgentConcurrencyMode;
     axi_port_base: number;
     isolation_mode: "shared" | "per-agent";
   };
@@ -411,8 +439,16 @@ export interface RunBenchmark {
   resources: {
     port_collisions: number;
     startup_failures: number;
-    memory_peak_mb: number;
+    orchestrator_memory_peak_mb: number;
+    system_memory_peak_percent: number;
+    system_load_peak_1m: number;
     chrome_processes_spawned: number;
+    resource_samples_path: string;
+  };
+  adaptive: {
+    initial_concurrency: number;
+    max_observed_concurrency: number;
+    decisions: number;
   };
   isolation: {
     profile_conflicts: number;

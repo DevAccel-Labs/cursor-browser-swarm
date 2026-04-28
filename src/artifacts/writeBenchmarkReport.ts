@@ -8,12 +8,18 @@ export interface BenchmarkInstrumentation {
   lastAgentCompleteMs: number;
   totalWallClockMs: number;
   memoryPeakMb: number;
+  systemMemoryPeakPercent: number;
+  systemLoadPeak1m: number;
   chromeProcessesSpawned: number;
   portCollisions: number;
   startupFailures: number;
   profileConflicts: number;
   tempDirCollisions: number;
   stateBleedEvents: number;
+  resourceSamplesPath: string;
+  initialConcurrency: number;
+  maxObservedConcurrency: number;
+  adaptiveDecisions: number;
 }
 
 function csvEscape(value: string | number): string {
@@ -34,6 +40,8 @@ export function createRunBenchmark(input: {
     config: {
       agents: input.config.agents,
       agent_concurrency: input.config.agentConcurrency,
+      requested_agent_concurrency: input.config.requestedAgentConcurrency,
+      agent_concurrency_mode: input.config.agentConcurrencyMode,
       axi_port_base: input.config.axiPortBase,
       isolation_mode:
         input.config.mode === "cursor-cli" && input.config.chromeMode === "axi"
@@ -52,8 +60,16 @@ export function createRunBenchmark(input: {
     resources: {
       port_collisions: input.instrumentation.portCollisions,
       startup_failures: input.instrumentation.startupFailures,
-      memory_peak_mb: input.instrumentation.memoryPeakMb,
+      orchestrator_memory_peak_mb: input.instrumentation.memoryPeakMb,
+      system_memory_peak_percent: input.instrumentation.systemMemoryPeakPercent,
+      system_load_peak_1m: input.instrumentation.systemLoadPeak1m,
       chrome_processes_spawned: input.instrumentation.chromeProcessesSpawned,
+      resource_samples_path: input.instrumentation.resourceSamplesPath,
+    },
+    adaptive: {
+      initial_concurrency: input.instrumentation.initialConcurrency,
+      max_observed_concurrency: input.instrumentation.maxObservedConcurrency,
+      decisions: input.instrumentation.adaptiveDecisions,
     },
     isolation: {
       profile_conflicts: input.instrumentation.profileConflicts,
@@ -75,6 +91,8 @@ export function benchmarkToCsv(benchmark: RunBenchmark): string {
     "run_id",
     "agents",
     "agent_concurrency",
+    "requested_agent_concurrency",
+    "agent_concurrency_mode",
     "axi_port_base",
     "isolation_mode",
     "preflight_ms",
@@ -84,8 +102,14 @@ export function benchmarkToCsv(benchmark: RunBenchmark): string {
     "avg_agent_runtime_ms",
     "port_collisions",
     "startup_failures",
-    "memory_peak_mb",
+    "orchestrator_memory_peak_mb",
+    "system_memory_peak_percent",
+    "system_load_peak_1m",
     "chrome_processes_spawned",
+    "resource_samples_path",
+    "initial_concurrency",
+    "max_observed_concurrency",
+    "adaptive_decisions",
     "profile_conflicts",
     "temp_dir_collisions",
     "state_bleed_events",
@@ -104,6 +128,8 @@ export function benchmarkToCsv(benchmark: RunBenchmark): string {
     benchmark.run_id,
     benchmark.config.agents,
     benchmark.config.agent_concurrency,
+    benchmark.config.requested_agent_concurrency,
+    benchmark.config.agent_concurrency_mode,
     benchmark.config.axi_port_base,
     benchmark.config.isolation_mode,
     benchmark.timing.preflight_ms,
@@ -113,8 +139,14 @@ export function benchmarkToCsv(benchmark: RunBenchmark): string {
     averageRuntime,
     benchmark.resources.port_collisions,
     benchmark.resources.startup_failures,
-    benchmark.resources.memory_peak_mb,
+    benchmark.resources.orchestrator_memory_peak_mb,
+    benchmark.resources.system_memory_peak_percent,
+    benchmark.resources.system_load_peak_1m,
     benchmark.resources.chrome_processes_spawned,
+    benchmark.resources.resource_samples_path,
+    benchmark.adaptive.initial_concurrency,
+    benchmark.adaptive.max_observed_concurrency,
+    benchmark.adaptive.decisions,
     benchmark.isolation.profile_conflicts,
     benchmark.isolation.temp_dir_collisions,
     benchmark.isolation.state_bleed_events,

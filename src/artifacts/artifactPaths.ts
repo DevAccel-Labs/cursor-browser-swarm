@@ -20,6 +20,7 @@ export function getArtifactPaths(outDir: string): ArtifactPaths {
     metricsJsonPath: path.join(outDir, "metrics.json"),
     benchmarkJsonPath: path.join(outDir, "benchmark.json"),
     benchmarkCsvPath: path.join(outDir, "benchmark.csv"),
+    resourceSamplesPath: path.join(outDir, "resource-samples.jsonl"),
   };
 }
 

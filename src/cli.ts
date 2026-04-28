@@ -30,13 +30,23 @@ program
   .option("--secrets-env-prefix <prefix>", "Prefix for secret env vars.", "SWARM_SECRET_")
   .option("--agents <number>", "Number of agents, 1-1000.", "4")
   .option(
-    "--agent-concurrency <number>",
-    "Max agent subprocesses to run in parallel. Defaults to --agents.",
+    "--agent-concurrency <number|auto>",
+    "Max agent subprocesses to run in parallel, or auto to tune from local resources.",
   )
   .option(
     "--assignment-strategy <strategy>",
     "split routes or replicate all routes per agent.",
-    "split",
+    "replicate",
+  )
+  .option(
+    "--agent-personas <list>",
+    "Comma-separated built-in agent personas (balanced, destructive, security, realtime, accessibility, edge-inputs).",
+  )
+  .option(
+    "--agent-directive <ID=INSTRUCTIONS>",
+    "Custom agent directive/persona. Repeat to assign multiple directives round-robin.",
+    collect,
+    [],
   )
   .option("--mode <mode>", "dry-run, cursor-cli, cursor-sdk, or cloud-api.", "dry-run")
   .option("--run-id <id>", "Deterministic run id.")

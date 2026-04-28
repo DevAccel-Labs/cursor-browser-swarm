@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { buildMissionPrompt } from "../src/cursor/missionPrompt.js";
+import { defaultAgentDirectives } from "../src/runner/agentDirectives.js";
 import type { AgentAssignment } from "../src/types.js";
 
 const assignment: AgentAssignment = {
   agentId: "agent-1",
   index: 0,
+  directive: defaultAgentDirectives[1]!,
   routes: [
     {
       path: "/dashboard",
@@ -43,6 +45,9 @@ describe("buildMissionPrompt", () => {
 
     expect(prompt).toContain("Repo:\n/repo");
     expect(prompt).toContain("Requested model:\ncomposer-2");
+    expect(prompt).toContain("Agent directive:");
+    expect(prompt).toContain("destructive (Destructive Flow Breaker)");
+    expect(prompt).toContain("Destructive actions allowed: yes");
     expect(prompt).toContain("1. /dashboard");
     expect(prompt).toContain("Click dashboard filters.");
     expect(prompt).toContain("Evidence contract:");

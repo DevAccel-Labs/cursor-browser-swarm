@@ -42,7 +42,7 @@ function makeCliReport(input: {
   agentId: string;
   assignment: AgentAssignment;
   artifactPaths: AgentArtifactPaths;
-  status: "succeeded" | "failed";
+  status: "succeeded" | "failed" | "cancelled";
   evidenceStatus?: "verified" | "partial" | "missing";
   evidenceScore?: "strong" | "partial" | "weak";
   blockedReason?: string;
@@ -715,6 +715,16 @@ export class CliCursorAgentClient implements CursorAgentClient {
         reject: false,
         all: true,
       });
+      const abortSubprocess = (): void => {
+        subprocess.kill("SIGTERM");
+        setTimeout(() => {
+          subprocess.kill("SIGKILL");
+        }, 5_000).unref();
+      };
+      if (input.signal?.aborted) {
+        abortSubprocess();
+      }
+      input.signal?.addEventListener("abort", abortSubprocess, { once: true });
       subprocess.all?.on("data", (chunk: Buffer | string) => {
         lastAgentOutputAt = Date.now();
         firstStdoutAt ??= lastAgentOutputAt;
@@ -741,8 +751,54 @@ export class CliCursorAgentClient implements CursorAgentClient {
       });
 
       const result = await subprocess;
+      input.signal?.removeEventListener("abort", abortSubprocess);
       clearInterval(silenceWatchdog);
       clearInterval(artifactObserver);
+      if (input.signal?.aborted) {
+        latestArtifactStats = await getArtifactStats(input.artifactPaths);
+        await appendAgentEvent({
+          eventsPath: input.eventsPath,
+          agentId: input.agentId,
+          phase: "cancelled",
+          message: `${input.agentId} cancelled; Cursor CLI subprocess was terminated.`,
+        });
+        const report = makeCliReport({
+          agentId: input.agentId,
+          assignment: input.assignment,
+          artifactPaths: input.artifactPaths,
+          status: "cancelled",
+          evidenceStatus: "missing",
+          evidenceScore: "weak",
+          findings: [],
+          notes: ["Run cancelled by user before this agent completed."],
+          telemetry: {
+            runtimeMs: Date.now() - Date.parse(startedAt),
+            ...(input.browserSession ? { axiPort: input.browserSession.axiPort } : {}),
+            axiPortConflict: input.browserSession?.axiPortConflict ?? false,
+            ...(input.browserSession
+              ? { browserProfilePath: input.browserSession.profileDir }
+              : {}),
+            peakMemoryMb: Math.round(process.memoryUsage().rss / 1024 / 1024),
+            sessionIsolationValid: input.browserSession?.sessionIsolationValid ?? true,
+            screenshotsProduced: latestArtifactStats.screenshots,
+            interactionsTotal: 0,
+            manifestFindings: 0,
+            reportWritten: latestArtifactStats.reportWritten,
+            manifestWritten: latestArtifactStats.manifestWritten,
+            consoleWritten: latestArtifactStats.consoleWritten,
+            networkWritten: latestArtifactStats.networkWritten,
+            realtimeTraceWritten: latestArtifactStats.realtimeTraceWritten,
+          },
+        });
+        await writeAgentReport(report);
+        return {
+          runId: input.agentId,
+          agentId: input.agentId,
+          status: "cancelled",
+          startedAt,
+          report,
+        };
+      }
       latestArtifactStats = await getArtifactStats(input.artifactPaths);
       const bufferedEvent = parseSwarmEventLine(lineBuffer);
       if (bufferedEvent) {

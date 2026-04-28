@@ -3,6 +3,8 @@ import path from "node:path";
 import { z } from "zod";
 import type {
   AssignmentStrategy,
+  AgentDirective,
+  AgentConcurrency,
   ContextPacket,
   RouteConfig,
   RunMode,
@@ -10,6 +12,7 @@ import type {
   SwarmSecret,
   SwarmSeverityFocus,
 } from "./types.js";
+import { parseCustomAgentDirective } from "./runner/agentDirectives.js";
 
 const severityFocusSchema = z.enum([
   "console",
@@ -31,10 +34,18 @@ const routeScenarioSchema = z.object({
   severityFocus: z.array(severityFocusSchema).default(["console", "network", "visual"]),
 });
 
+const agentDirectiveSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1).optional(),
+  instructions: z.string().min(1),
+  allowDestructiveActions: z.boolean().default(false),
+});
+
 const routeConfigSchema = z.object({
   appName: z.string().min(1).default("Browser App"),
   baseUrl: z.string().url().optional(),
   routes: z.array(routeScenarioSchema).min(1),
+  agentDirectives: z.array(agentDirectiveSchema).optional(),
 });
 
 const bboxSchema = z.object({
@@ -72,6 +83,14 @@ export async function loadRouteConfig(routePath: string): Promise<RouteConfig> {
       severityFocus: route.severityFocus as SwarmSeverityFocus[],
     })),
   };
+  if (config.agentDirectives) {
+    result.agentDirectives = config.agentDirectives.map((directive) => ({
+      id: directive.id,
+      label: directive.label ?? directive.id,
+      instructions: directive.instructions,
+      allowDestructiveActions: directive.allowDestructiveActions,
+    }));
+  }
   if (config.baseUrl) {
     result.baseUrl = config.baseUrl;
   }
@@ -96,10 +115,13 @@ export function parseAgents(value: string): number {
   return agents;
 }
 
-export function parseAgentConcurrency(value: string, agents: number): number {
+export function parseAgentConcurrency(value: string, agents: number): AgentConcurrency {
+  if (value.trim().toLowerCase() === "auto") {
+    return "auto";
+  }
   const concurrency = Number.parseInt(value, 10);
   if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > agents) {
-    throw new Error("--agent-concurrency must be an integer between 1 and --agents.");
+    throw new Error("--agent-concurrency must be auto or an integer between 1 and --agents.");
   }
   return concurrency;
 }
@@ -139,6 +161,14 @@ export function parseSecret(value: string): SwarmSecret {
   return { key, value: secretValue };
 }
 
+function parseCustomAgentDirectives(value: unknown): AgentDirective[] {
+  if (!value) {
+    return [];
+  }
+  const rawValues = Array.isArray(value) ? value : [value];
+  return rawValues.map((item) => parseCustomAgentDirective(String(item)));
+}
+
 export function parseCliOptions(options: Record<string, unknown>): SwarmCliOptions {
   const mode = parseRunMode(String(options.mode ?? "dry-run"));
   const chromeMode = chromeModeSchema.parse(String(options.chromeMode ?? defaultChromeMode(mode)));
@@ -147,7 +177,7 @@ export function parseCliOptions(options: Record<string, unknown>): SwarmCliOptio
   const agentConcurrency =
     typeof options.agentConcurrency === "number"
       ? parseAgentConcurrency(String(options.agentConcurrency), agents)
-      : parseAgentConcurrency(String(options.agentConcurrency ?? String(agents)), agents);
+      : parseAgentConcurrency(String(options.agentConcurrency ?? "auto"), agents);
   const rawSecret = options.secret;
   const secretValues = Array.isArray(rawSecret)
     ? rawSecret.map((value) => parseSecret(String(value)))
@@ -176,7 +206,8 @@ export function parseCliOptions(options: Record<string, unknown>): SwarmCliOptio
     interactiveSecrets: Boolean(options.interactiveSecrets),
     agents,
     agentConcurrency,
-    assignmentStrategy: parseAssignmentStrategy(String(options.assignmentStrategy ?? "split")),
+    assignmentStrategy: parseAssignmentStrategy(String(options.assignmentStrategy ?? "replicate")),
+    agentDirectives: parseCustomAgentDirectives(options.agentDirective),
     mode,
     runId: options.runId ? String(options.runId) : undefined,
     outDir: options.outDir ? path.resolve(String(options.outDir)) : undefined,
@@ -185,6 +216,7 @@ export function parseCliOptions(options: Record<string, unknown>): SwarmCliOptio
     chromeMode,
     axiPortBase: options.axiPortBase ? parseAxiPortBase(String(options.axiPortBase)) : undefined,
     maxRouteSteps,
+    agentPersonas: options.agentPersonas ? String(options.agentPersonas) : undefined,
     contextPacketPath: options.contextPacket
       ? path.resolve(String(options.contextPacket))
       : undefined,
@@ -225,6 +257,7 @@ export function mergeBaseUrl(config: RouteConfig, cliBaseUrl: string): RouteConf
         "visual",
       ]) as SwarmSeverityFocus[],
     })),
+    agentDirectives: config.agentDirectives,
   };
 }
 

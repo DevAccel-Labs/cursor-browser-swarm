@@ -110,6 +110,10 @@ function formatEvidenceManifestContract(input: MissionPromptInput): string {
 {
   "version": "1",
   "agentId": "${input.agentId}",
+  "agentDirective": {
+    "id": "${input.assignment.directive.id}",
+    "label": "${input.assignment.directive.label}"
+  },
   "status": "passed" | "failed" | "blocked",
   "baseUrl": "${input.baseUrl}",
   "routes": [
@@ -184,13 +188,16 @@ function formatCausalityRules(): string {
 
 function formatRoutePlaybooks(input: MissionPromptInput): string {
   const focus = new Set(input.assignment.routes.flatMap((route) => route.severityFocus));
+  const destructiveGuidance = input.assignment.directive.allowDestructiveActions
+    ? "- This agent is allowed to exercise destructive-looking test flows when they are in scope for the route goal or operator instructions. Stay inside test data, avoid billing/account-wide damage, and document exactly what you changed."
+    : "- Avoid destructive actions such as delete/archive/billing unless the operator explicitly asks for them.";
   const playbooks = [
     "General long-horizon UI/UX validation playbook:",
     `- Stay within ${input.maxRouteSteps} meaningful interactions per route unless the operator instructions require more.`,
     "- Prefer realistic user journeys over shallow page-load checks: navigation, forms, empty states, loading states, modals, menus, filters, pagination, back/forward, refresh persistence, and error recovery.",
     "- For every route, identify the primary user intent and at least two secondary UI surfaces to exercise.",
     "- Check whether the page gives clear feedback after each action. Report confusing success/error states even if the app technically works.",
-    "- Avoid destructive actions such as delete/archive/billing unless the operator explicitly asks for them.",
+    destructiveGuidance,
   ];
   if (focus.has("accessibility")) {
     playbooks.push(
@@ -218,6 +225,16 @@ function formatRoutePlaybooks(input: MissionPromptInput): string {
     );
   }
   return playbooks.join("\n");
+}
+
+function formatAgentDirective(assignment: AgentAssignment): string {
+  return [
+    "Agent directive:",
+    `- Persona: ${assignment.directive.id} (${assignment.directive.label})`,
+    `- Instructions: ${assignment.directive.instructions}`,
+    `- Destructive actions allowed: ${assignment.directive.allowDestructiveActions ? "yes" : "no"}`,
+    "- Your evidence, findings, and debugHints should reflect this persona so parallel replicated agents explore meaningfully different risks.",
+  ].join("\n");
 }
 
 function formatSecretReferences(secrets: SwarmSecret[], prefix: string): string {
@@ -280,6 +297,8 @@ ${input.model ?? "Cursor default"}
 
 Assigned routes:
 ${routes}
+
+${formatAgentDirective(input.assignment)}
 
 Mission:
 Use browser/devtools tools to interact with the app like a QA-minded engineer.
@@ -344,7 +363,7 @@ Report format:
 - Console/network notes
 - Reproduction steps
 - Likely source files
-- Fix attempt and verification status
+- Fix readiness and handoff/debug hints
 - Self-check: state whether screenshot, console, network, and browser interaction evidence exist
 </cursor_browser_swarm_mission>`;
 }
