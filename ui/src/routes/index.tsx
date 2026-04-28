@@ -263,9 +263,9 @@ function SwarmDashboard() {
         />
 
         {/* Workspace */}
-        <main className="flex-1 overflow-hidden">
+        <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {activeView === "config" ? (
-            <ScrollArea className="h-full">
+            <ScrollArea className="min-h-0 flex-1">
               <div className="mx-auto max-w-4xl space-y-6 p-6">
                 <ConfigForm
                   defaults={defaults}

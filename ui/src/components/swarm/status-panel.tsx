@@ -1,9 +1,11 @@
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
+import { Check, ChevronDown, Clipboard } from "lucide-react"
+import type { SwarmEvent, UiRunState } from "@/lib/types"
+import { MarkdownReport } from "@/components/swarm/markdown-report"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import { ChevronDown } from "lucide-react"
-import type { UiRunState, SwarmEvent } from "@/lib/types"
+import { ScrollArea } from "@/components/ui/scroll-area"
 
 interface StatusPanelProps {
   runState: UiRunState | null
@@ -20,7 +22,7 @@ function formatTime(timestamp?: string): string {
   }
 }
 
-function parseEvents(rawEvents: string): SwarmEvent[] {
+function parseEvents(rawEvents: string): Array<SwarmEvent> {
   return rawEvents
     .split(/\r?\n/)
     .filter(Boolean)
@@ -39,8 +41,10 @@ interface TimelineEvent extends SwarmEvent {
   sequence: number
 }
 
-function groupEventsByAgent(events: SwarmEvent[]): Map<string, TimelineEvent[]> {
-  const grouped = new Map<string, TimelineEvent[]>()
+function groupEventsByAgent(
+  events: Array<SwarmEvent>
+): Map<string, Array<TimelineEvent>> {
+  const grouped = new Map<string, Array<TimelineEvent>>()
 
   for (const event of events) {
     const agentId = event.context?.agentId || "unknown"
@@ -63,8 +67,22 @@ function groupEventsByAgent(events: SwarmEvent[]): Map<string, TimelineEvent[]> 
 }
 
 export function StatusPanel({ runState, events, report }: StatusPanelProps) {
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle")
   const parsedEvents = useMemo(() => parseEvents(events), [events])
   const groupedEvents = useMemo(() => groupEventsByAgent(parsedEvents), [parsedEvents])
+
+  const copyFinalReport = async () => {
+    if (!report) return
+
+    try {
+      await navigator.clipboard.writeText(report)
+      setCopyState("copied")
+    } catch {
+      setCopyState("failed")
+    }
+
+    window.setTimeout(() => setCopyState("idle"), 2000)
+  }
 
   return (
     <div className="space-y-4">
@@ -154,15 +172,35 @@ export function StatusPanel({ runState, events, report }: StatusPanelProps) {
 
       {/* Final Report */}
       <Card>
-        <CardHeader className="pb-3">
+        <CardHeader className="flex flex-row items-center justify-between gap-3 pb-3">
           <CardTitle className="text-base">Final Report</CardTitle>
+          {report && (
+            <Button variant="outline" size="xs" onClick={copyFinalReport}>
+              {copyState === "copied" ? (
+                <Check className="size-3" />
+              ) : (
+                <Clipboard className="size-3" />
+              )}
+              {copyState === "copied"
+                ? "Copied"
+                : copyState === "failed"
+                  ? "Copy failed"
+                  : "Copy report"}
+            </Button>
+          )}
         </CardHeader>
-        <CardContent>
-          <ScrollArea className="h-64">
-            <pre className="whitespace-pre-wrap text-xs">
-              {report || "Report will appear after the run completes."}
-            </pre>
-          </ScrollArea>
+        <CardContent className="pt-0">
+          {report ? (
+            <div className="rounded-lg border border-border/60 bg-muted/25 px-5 py-8">
+              <MarkdownReport markdown={report} />
+            </div>
+          ) : (
+            <div className="rounded-lg border border-dashed border-border/60 px-5 py-10">
+              <p className="text-center text-sm text-muted-foreground">
+                Report will appear after the run completes.
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

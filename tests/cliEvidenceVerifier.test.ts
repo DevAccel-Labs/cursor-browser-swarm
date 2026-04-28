@@ -375,6 +375,127 @@ describe("CLI evidence verifier", () => {
     expect(result.notes.join("\n")).toContain("Realtime/protocol concern detected");
   });
 
+  it("does not mark evidence strong when realtime trace only documents probe failure", async () => {
+    const paths = await createAgentPaths();
+    const screenshotPath = path.join(paths.screenshotsDir, "kanban.png");
+    await mkdir(paths.screenshotsDir, { recursive: true });
+    await writeFile(screenshotPath, "fake image bytes");
+    await writeFile(paths.consolePath, "[]\n");
+    await writeFile(paths.networkPath, "Network review: no failed requests, 4xx, or 5xx.\n");
+    await writeFile(
+      paths.realtimeTracePath,
+      `${JSON.stringify(
+        {
+          captureMethod: "page-probe",
+          status: "probe-error",
+          note: 'realtime-save returned "fn is not a function".',
+          events: [],
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    await writeFile(
+      paths.reportPath,
+      [
+        "# Report",
+        "Screenshot: screenshots/kanban.png",
+        "Network review: no failed requests, 4xx, or 5xx responses observed.",
+        "Observed optimistic temp_ card disappeared after persistence reconciliation.",
+      ].join("\n"),
+    );
+    await writeFile(
+      paths.evidenceManifestPath,
+      `${JSON.stringify(
+        {
+          version: "1",
+          agentId: "agent-1",
+          status: "failed",
+          baseUrl: "http://localhost:3000",
+          routes: [
+            {
+              path: "/kanban",
+              status: "failed",
+              opened: true,
+              interactions: ["Created card", "Set date"],
+              screenshots: [screenshotPath],
+              consoleChecked: true,
+              networkChecked: true,
+              realtimeChecked: true,
+              findings: [],
+            },
+          ],
+          artifacts: {
+            report: paths.reportPath,
+            screenshots: [screenshotPath],
+            console: paths.consolePath,
+            network: paths.networkPath,
+            realtimeTrace: paths.realtimeTracePath,
+          },
+          selfCheck: {
+            browserOpened: true,
+            browserInteracted: true,
+            screenshotsExist: true,
+            consoleInspected: true,
+            networkInspected: true,
+            realtimeInspected: true,
+            artifactPathsExist: true,
+          },
+          notes: [],
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    const result = await __test__.verifyCliEvidence({
+      output: "",
+      artifactPaths: paths,
+    });
+
+    expect(result.status).toBe("verified");
+    expect(result.score).toBe("partial");
+    expect(result.notes.join("\n")).toContain("Realtime trace status is probe-error");
+  });
+
+  it("accepts Playwright-style realtime trace arrays as usable protocol artifacts", async () => {
+    const paths = await createAgentPaths();
+    const screenshotPath = path.join(paths.screenshotsDir, "kanban.png");
+    await mkdir(paths.screenshotsDir, { recursive: true });
+    await writeFile(screenshotPath, "fake image bytes");
+    await writeFile(paths.consolePath, "[]\n");
+    await writeFile(paths.networkPath, "Network review: no failed requests, 4xx, or 5xx.\n");
+    await writeFile(
+      paths.realtimeTracePath,
+      `${JSON.stringify([
+        {
+          transport: "websocket",
+          direction: "inbound",
+          url: "ws://localhost/realtime",
+          payload: "{}",
+          timestamp: new Date().toISOString(),
+        },
+      ])}\n`,
+    );
+    await writeFile(
+      paths.reportPath,
+      [
+        "# Report",
+        "Screenshot: screenshots/kanban.png",
+        "Network review: no failed requests, 4xx, or 5xx responses observed.",
+        "Observed optimistic temp_ card reconciled after websocket ack.",
+      ].join("\n"),
+    );
+
+    const result = await __test__.verifyCliEvidence({
+      output: goodOutput,
+      artifactPaths: paths,
+    });
+
+    expect(result.status).toBe("verified");
+    expect(result.score).toBe("strong");
+  });
+
   it("surfaces blocked evidence manifests without verifying them", async () => {
     const paths = await createAgentPaths();
     await writeFile(paths.reportPath, "# Report\nBlocked: AXI could not connect.\n");

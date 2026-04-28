@@ -1,6 +1,4 @@
 import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router"
-import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools"
-import { TanStackDevtools } from "@tanstack/react-devtools"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { Toaster } from "@/components/ui/sonner"
 
@@ -49,17 +47,6 @@ function RootDocument({ children }: { children: React.ReactNode }) {
           {children}
           <Toaster position="bottom-right" />
         </TooltipProvider>
-        <TanStackDevtools
-          config={{
-            position: "bottom-left",
-          }}
-          plugins={[
-            {
-              name: "Tanstack Router",
-              render: <TanStackRouterDevtoolsPanel />,
-            },
-          ]}
-        />
         <Scripts />
       </body>
     </html>

@@ -390,6 +390,60 @@ function artifactReferenceExists(input: {
   );
 }
 
+function reviewRealtimeTrace(text: string): {
+  present: boolean;
+  usable: boolean;
+  reason?: string;
+} {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return { present: false, usable: false };
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    if (Array.isArray(parsed)) {
+      return { present: true, usable: true };
+    }
+    if (!parsed || typeof parsed !== "object") {
+      return { present: true, usable: false, reason: "Realtime trace is not an object or array." };
+    }
+    const trace = parsed as Record<string, unknown>;
+    const status = typeof trace.status === "string" ? trace.status : undefined;
+    const note = typeof trace.note === "string" ? trace.note : "";
+    const hasEvents = Array.isArray(trace.events);
+    const hasInstallSignal = typeof trace.installed === "boolean";
+    const failingStatuses = new Set([
+      "unavailable",
+      "probe-error",
+      "probe-unavailable",
+      "error",
+      "failed",
+    ]);
+
+    if (status && failingStatuses.has(status)) {
+      return { present: true, usable: false, reason: `Realtime trace status is ${status}.` };
+    }
+    if (/\bfn is not a function\b/i.test(note)) {
+      return {
+        present: true,
+        usable: false,
+        reason: 'Realtime trace records AXI eval failure "fn is not a function".',
+      };
+    }
+    if (hasEvents || hasInstallSignal || status === "captured") {
+      return { present: true, usable: true };
+    }
+    return {
+      present: true,
+      usable: false,
+      reason: "Realtime trace JSON did not include events, capture status, or probe install state.",
+    };
+  } catch {
+    return { present: true, usable: false, reason: "Realtime trace is not valid JSON." };
+  }
+}
+
 async function verifyCliEvidence(input: {
   output: string;
   artifactPaths: AgentArtifactPaths;
@@ -410,6 +464,7 @@ async function verifyCliEvidence(input: {
     ? await readFile(input.artifactPaths.realtimeTracePath, "utf8")
     : "";
   const networkCombined = `${combined}\n${networkText}\n${realtimeText}`;
+  const realtimeTraceReview = reviewRealtimeTrace(realtimeText);
   const artifactPaths = await listAgentArtifactPaths(input.artifactPaths.agentDir);
   const referencedArtifacts = extractReferencedArtifacts(reportText);
   const imageReferences = referencedArtifacts.filter(isImageArtifact);
@@ -501,6 +556,7 @@ async function verifyCliEvidence(input: {
   const hasRealtimeArtifact = artifactPaths.some((artifactPath) =>
     artifactPath.endsWith("realtime-trace.json"),
   );
+  const hasUsableRealtimeArtifact = hasRealtimeArtifact && realtimeTraceReview.usable;
   const hasRealtimeConcern = hasAnyPattern(networkCombined, [
     /\b(?:realtime|websocket|web socket|socket-backed|ws)\b/i,
     /\b(?:optimistic|temp_|temporary id|ack|snapshot|persistence|reconcile)\b/i,
@@ -510,7 +566,11 @@ async function verifyCliEvidence(input: {
     /\b(?:observed|captured|missing|not captured|not exposed|no frames|ack|snapshot|payload|op)\b.{0,120}\b(?:realtime|websocket|web socket|ws)\b/i,
   ]);
   const realtimeEvidenceReady =
-    !hasRealtimeConcern || hasRealtimeArtifact || manifestRealtimeChecked || hasRealtimeReview;
+    !hasRealtimeConcern ||
+    hasUsableRealtimeArtifact ||
+    manifestRealtimeChecked ||
+    hasRealtimeReview;
+  const realtimeEvidenceStrong = !hasRealtimeConcern || hasUsableRealtimeArtifact;
   const blockedReason =
     manifest?.blockedReason ??
     manifest?.routes.find((route) => route.status === "blocked" && route.blockedReason)
@@ -538,9 +598,14 @@ async function verifyCliEvidence(input: {
       : "Missing explicit failed-request/4xx/5xx network review.",
     !hasRealtimeConcern
       ? "Realtime/protocol evidence not required by observed artifacts."
-      : realtimeEvidenceReady
-        ? "Realtime/protocol evidence or explicit missing-protocol review present."
-        : "Realtime/protocol concern detected, but no realtime trace or explicit missing-protocol review was present.",
+      : realtimeEvidenceStrong
+        ? "Realtime/protocol artifact is usable."
+        : realtimeEvidenceReady
+          ? "Realtime/protocol concern documented, but no usable realtime trace was captured."
+          : "Realtime/protocol concern detected, but no realtime trace or explicit missing-protocol review was present.",
+    ...(realtimeTraceReview.present && !realtimeTraceReview.usable && realtimeTraceReview.reason
+      ? [realtimeTraceReview.reason]
+      : []),
     hasExistingScreenshot
       ? "Verified screenshot artifact evidence."
       : "Missing screenshot artifact evidence.",
@@ -567,7 +632,7 @@ async function verifyCliEvidence(input: {
     };
   }
   if (passed === requiredChecks.length) {
-    const score = hasFailedRequestReview && realtimeEvidenceReady ? "strong" : "partial";
+    const score = hasFailedRequestReview && realtimeEvidenceStrong ? "strong" : "partial";
     return { status: "verified", score, notes };
   }
   if (passed >= 3) {

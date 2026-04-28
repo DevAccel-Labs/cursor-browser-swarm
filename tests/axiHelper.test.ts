@@ -23,6 +23,9 @@ describe("writeAxiHelper", () => {
     expect(script).toContain("realtime-start");
     expect(script).toContain("realtime-save");
     expect(script).toContain("realtime-cdp-record");
+    expect(script).toContain('runAxi(["run"], undefined, { input: realtimeStartScript })');
+    expect(script).toContain('runAxi(["run"], realtimePath, { input: realtimeReadScript })');
+    expect(script).not.toContain('runAxi(["eval", realtimeReadSource]');
     expect(script).toContain("SWARM_CDP_URL");
     expect(script).toContain("realtime-trace.json");
     expect(script).toContain("passthroughCommands.has(command)");

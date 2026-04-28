@@ -251,4 +251,4 @@ The current system checks routes I specify. The next step is probably autonomous
 
 I'm also trying out fix mode. Instead of just reporting issues, agents make small code changes and re-check. This works for obvious bugs (missing null checks, typos) but needs guardrails for bigger changes, but with cursor’s cli and agents it's extremely easy to get production ready and quality outputs.
 
-*If you're working on similar problems, agents that can check their own work, I'd be interested to hear what you're finding.*  
+*If you're working on similar problems, agents that can check their own work, I'd be interested to hear what you're finding.* This project's code is at https://github.com/DevAccel-Labs/cursor-browser-swarm.

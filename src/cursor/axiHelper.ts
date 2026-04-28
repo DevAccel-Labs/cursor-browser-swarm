@@ -30,7 +30,11 @@ function slug(value) {
 }
 
 function runAxi(args, outputPath, options = {}) {
-  const input = options.stdin ? readFileSync(0, "utf8") : undefined;
+  const input = typeof options.input === "string"
+    ? options.input
+    : options.stdin
+      ? readFileSync(0, "utf8")
+      : undefined;
   const result = spawnSync("npx", ["-y", "chrome-devtools-axi", ...args], {
     encoding: "utf8",
     env: {
@@ -43,7 +47,9 @@ function runAxi(args, outputPath, options = {}) {
       CHROME_DEVTOOLS_AXI_DISABLE_HOOKS: "1",
     },
     input,
-    stdio: outputPath ? ["ignore", "pipe", "pipe"] : "inherit",
+    stdio: outputPath
+      ? [input === undefined ? "ignore" : "pipe", "pipe", "pipe"]
+      : [input === undefined ? "inherit" : "pipe", "inherit", "inherit"],
   });
   if (outputPath) {
     writeFileSync(outputPath, result.stdout || "[]\\n");
@@ -138,8 +144,8 @@ if (command === "--help" || command === "help") {
   process.exit(0);
 }
 
-const realtimeStartSource = [
-  "(() => {",
+const realtimeStartScript = [
+  "const result = await page.eval(() => {",
   "  const w = window;",
   "  if (w.__swarmRealtimeProbeInstalled) return 'swarm realtime probe already installed';",
   "  const NativeWebSocket = w.WebSocket;",
@@ -174,15 +180,17 @@ const realtimeStartSource = [
   "  w.__swarmRealtimeProbeInstalled = true;",
   "  w.WebSocket = SwarmWebSocket;",
   "  return 'swarm realtime probe installed for sockets created after this point';",
-  "})()",
+  "});",
+  "console.log(result);",
 ].join("\\n");
 
-const realtimeReadSource = [
-  "(() => JSON.stringify({",
+const realtimeReadScript = [
+  "const trace = await page.eval(() => ({",
   "  installed: Boolean(window.__swarmRealtimeProbeInstalled),",
   "  note: 'Page-level probe captures WebSockets created after realtime-start; empty events may mean no sockets were created after installation or the browser tool cannot expose frames.',",
   "  events: window.__swarmRealtimeEvents || []",
-  "}, null, 2))()",
+  "}));",
+  "console.log(JSON.stringify(trace, null, 2));",
 ].join("\\n");
 
 function cdpBaseCandidates() {
@@ -286,11 +294,10 @@ switch (command) {
     console.log(path.join(artifactDir, "network.json"));
     break;
   case "realtime-start":
-    runAxi(["eval", realtimeStartSource]);
-    console.log("swarm realtime probe installed for future WebSocket connections");
+    runAxi(["run"], undefined, { input: realtimeStartScript });
     break;
   case "realtime-save":
-    runAxi(["eval", realtimeReadSource], realtimePath);
+    runAxi(["run"], realtimePath, { input: realtimeReadScript });
     console.log(realtimePath);
     break;
   case "realtime-cdp-record":

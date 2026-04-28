@@ -3,7 +3,6 @@ import { Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
 import type { SwarmEvent, ActivityLine } from "@/lib/types"
 
@@ -116,7 +115,7 @@ export function ActivityView({ events }: ActivityViewProps) {
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex min-h-0 flex-1 flex-col">
       {/* Controls */}
       <div className="flex flex-wrap items-center gap-4 border-b bg-muted/30 p-3">
         <FilterCheckbox
@@ -163,8 +162,11 @@ export function ActivityView({ events }: ActivityViewProps) {
         </div>
       </div>
 
-      {/* Activity Log */}
-      <ScrollArea ref={scrollRef} className="flex-1 bg-background">
+      {/* Activity Log: min-h-0 + overflow-y-auto so flex layout allows inner scroll */}
+      <div
+        ref={scrollRef}
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-background [scrollbar-gutter:stable]"
+      >
         <div className="font-mono text-xs">
           {filteredLines.length === 0 && (
             <div className="p-8 text-center text-muted-foreground">
@@ -208,7 +210,7 @@ export function ActivityView({ events }: ActivityViewProps) {
             </div>
           ))}
         </div>
-      </ScrollArea>
+      </div>
     </div>
   )
 }
