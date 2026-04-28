@@ -172,6 +172,10 @@ The 10-agent run taught me a few things about scaling this approach.
 
 Here's output from a recent run against a real application currently in production. I scaled this one up to 10 agents hitting a single route to see how well they'd find the same issues independently.
 
+The swarm agents weren't given the diff or repo. They just executed a scripted mission against a running app, given the devserver url, test scenario to validate, and what model to use with Cursor CLI.
+
+Browser automation opened the board URL, used an accessibility snapshot to get stable element targets, clicked "Add a card," typed a title, submitted, then opened sheets and menus to archive. It also captured network traffic during each action, dumping both HTTP requests and WebSocket frames to network.json, and ran console inspection to catch any client side errors or warnings that fired during the flow.
+
 ```
 10:15:56 AM  Run initialized (10 agents, 1 route, cursor-cli mode)
 10:15:57 AM  Base URL healthy
@@ -234,29 +238,23 @@ The agent reports included details like:
 
 These aren't vague claims. Each finding has screenshots showing before/after states, console logs with the actual error, and network traces I can cross-reference. When multiple agents independently find the same bug through different interaction sequences, that's pretty strong signal it's a real issue.
 
+**Why multiple issues showed up**
+
+One root cause (no server card) can fan out into multiple observed symptoms: silent errors, stale add card field state, temp id stuck in URL. Running 10 agents on the same route found 26 total issues, but the system grouped these into 11 root cause clusters. That deduplication is pretty important, otherwise you'd be triaging the same bug a dozen times.
+
+The clustering also helps validate findings. When 6 out of 10 agents independently hit the "card disappears after date save" bug through different interaction sequences, that's way more confidence than a single agent finding it once.
+
 ## **A controlled failure**
 
 To really test this, we injected a client to server contract bug on the Kanban create card path. The UI still ran the optimistic update so the new card appeared locally for the user, but the WebSocket operation used an operation type the realtime Cloudflare worker doesn't handle. On the server side, that falls through to an "unknown client operation" and the convert returns null, so nothing ever persists and there's no proper ack path for that create. The next authoritative snapshot or page reload replaced client state with server's truth, the card just vanished.
 
 The downstream symptoms the swarm reported (temp IDs stuck in the URL, archive oddities, "nothing persisted") all line up with optimistic temp IDs that never get mapped to real IDs.
 
-**How the agents found it**
-
-The swarm agents weren't given the diff or repo. They just executed a scripted mission against a running app, given the devserver url, test scenario to validate, and what model to use with Cursor CLI.
-
-Browser automation opened the board URL, used an accessibility snapshot to get stable element targets, clicked "Add a card," typed a title, submitted, then opened sheets and menus to archive. It also captured network traffic during each action, dumping both HTTP requests and WebSocket frames to network.json, and ran console inspection to catch any client side errors or warnings that fired during the flow.
-
 The agents noticed a behavioral contradiction: card appears, then disappears after a realtime refresh. That pattern pretty much screams "optimistic-only" or "server rejected" rather than "button broken."
 
 The artifacts backed this up. Screenshots anchored the story, showing the board with the card, then empty, then follow up UI glitches. Console logs captured any thrown errors at capture time. Network logs showed whether HTTP calls looked fine, though the real Kanban create is mainly WebSocket traffic, so a naive "no failed fetch" pass can miss the issue.
 
 The agents phrased the finding as "likely failure to reconcile optimistic temp card id with server id after date mutation." That's basically right. They couldn't see the code, but the hypothesis was good enough that someone with the codebase could understand and debug.
-
-**Why multiple issues showed up**
-
-One root cause (no server card) can fan out into multiple observed symptoms: silent errors, stale add card field state, temp id stuck in URL. Running 10 agents on the same route found 26 total issues, but the system grouped these into 11 root cause clusters. That deduplication is pretty important, otherwise you'd be triaging the same bug a dozen times.
-
-The clustering also helps validate findings. When 6 out of 10 agents independently hit the "card disappears after date save" bug through different interaction sequences, that's way more confidence than a single agent finding it once.
 
 ## **Learnings**
 
