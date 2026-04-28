@@ -1,8 +1,23 @@
 {
   "name": "cursor-browser-swarm",
   "version": "0.1.0",
-  "private": true,
   "description": "Parallel browser validation for Cursor agents.",
+  "author": "Tejas Haveri",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/devaccel-labs/cursor-browser-swarm.git"
+  },
+  "homepage": "https://github.com/devaccel-labs/cursor-browser-swarm#readme",
+  "keywords": [
+    "cursor",
+    "browser",
+    "testing",
+    "automation",
+    "playwright",
+    "ai-agents",
+    "qa"
+  ],
   "bin": {
     "cursor-browser-swarm": "./dist/cli.js",
     "cursor-swarm": "./dist/cli.js"
