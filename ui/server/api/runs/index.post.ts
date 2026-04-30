@@ -1,13 +1,32 @@
-import { eventHandler, readBody, setResponseStatus, type H3Event } from "h3"
-import { getRunsStore, makeRunId, type UiRunState } from "../../lib/runs-store"
-import { homedir } from "node:os"
 import { mkdir, writeFile } from "node:fs/promises"
+import { homedir } from "node:os"
 import path from "node:path"
+import { eventHandler, readBody, setResponseStatus } from "h3"
+import { loadEnvFile } from "../../../../src/env"
+import {
+  parseAgentConcurrency,
+  parseAgents,
+  parseAssignmentStrategy,
+  parseAxiPortBase,
+  parseRouteSteps,
+  parseRunMode,
+} from "../../../../src/config"
+import { parseCustomAgentDirective } from "../../../../src/runner/agentDirectives"
+import { runSwarmWithSignal } from "../../../../src/runner/runSwarm"
+import { getRunsStore, makeRunId } from "../../lib/runs-store"
+import type { H3Event } from "h3"
+import type {
+  AgentConcurrency,
+  ChromeMode,
+  SwarmCliOptions,
+  SwarmSecret,
+} from "../../../../src/types"
+import type { UiRunState } from "../../lib/runs-store"
 
 interface RunRequest {
   appName: string
   baseUrl: string
-  routes: Array<{ path: string; goal: string; hints?: string[]; severityFocus?: string[] }>
+  routes: Array<{ path: string; goal: string; hints?: Array<string>; severityFocus?: Array<string> }>
   instructions?: string
   secrets?: Array<{ key: string; value: string }>
   agents?: number | string
@@ -17,6 +36,7 @@ interface RunRequest {
   mode?: string
   chromeMode?: string
   model?: string
+  cursorCommand?: string
   noDevServer?: boolean
   maxRouteSteps?: number | string
   assignmentStrategy?: string
@@ -35,6 +55,89 @@ function safePathSegment(value: string): string {
 
 function defaultOutDir(appName: string, runId: string): string {
   return path.join(homedir(), ".cursor-browser-swarm", "runs", safePathSegment(appName), runId)
+}
+
+function repoRoot(): string {
+  return path.basename(process.cwd()) === "ui" ? path.resolve(process.cwd(), "..") : process.cwd()
+}
+
+function publicRunState(state: UiRunState): Omit<UiRunState, "controller"> {
+  const { controller: _controller, ...publicState } = state
+  return publicState
+}
+
+function parseOptionalAxiPortBase(value: number | string | undefined): number | undefined {
+  if (value === undefined || value === "") {
+    return undefined
+  }
+  return parseAxiPortBase(String(value))
+}
+
+function parseSecrets(secrets: RunRequest["secrets"]): Array<SwarmSecret> {
+  return (secrets ?? [])
+    .filter((secret) => secret.key.trim() && secret.value)
+    .map((secret) => ({
+      key: secret.key.trim(),
+      value: secret.value,
+    }))
+}
+
+function parseAgentDirectiveLines(value: string | undefined): Array<string> {
+  if (!value?.trim()) {
+    return []
+  }
+  return value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+}
+
+function buildCliOptions(input: {
+  body: RunRequest
+  runId: string
+  outDir: string
+  routesPath: string
+  instructionsPath: string | undefined
+}): SwarmCliOptions {
+  const agents = parseAgents(String(input.body.agents ?? "4"))
+  const agentConcurrency: AgentConcurrency = parseAgentConcurrency(
+    String(input.body.agentConcurrency ?? "auto"),
+    agents
+  )
+  const mode = parseRunMode(input.body.mode ?? "cursor-cli")
+  const chromeMode = (input.body.chromeMode ?? "axi") as ChromeMode
+
+  const options: SwarmCliOptions = {
+    repo: repoRoot(),
+    noDevServer: input.body.noDevServer ?? true,
+    baseUrl: input.body.baseUrl.trim(),
+    routesPath: input.routesPath,
+    secrets: parseSecrets(input.body.secrets),
+    secretEnv: {},
+    secretsEnvPrefix: "SWARM_SECRET_",
+    interactiveSecrets: false,
+    agents,
+    agentConcurrency,
+    assignmentStrategy: parseAssignmentStrategy(input.body.assignmentStrategy ?? "replicate"),
+    agentDirectives: parseAgentDirectiveLines(input.body.agentDirectives).map((line) =>
+      parseCustomAgentDirective(line)
+    ),
+    agentPersonas: input.body.agentPersonas,
+    mode,
+    runId: input.runId,
+    outDir: input.outDir,
+    cursorCommand: input.body.cursorCommand?.trim() || "agent",
+    model: input.body.model?.trim() || undefined,
+    chromeMode,
+    axiPortBase: parseOptionalAxiPortBase(input.body.axiPortBase),
+    maxRouteSteps: parseRouteSteps(String(input.body.maxRouteSteps ?? "12")),
+  }
+
+  if (input.instructionsPath) {
+    options.instructionsPath = input.instructionsPath
+  }
+
+  return options
 }
 
 export default eventHandler(async (event: H3Event) => {
@@ -88,18 +191,36 @@ export default eventHandler(async (event: H3Event) => {
 
   store.setRunState(runId, state)
 
-  // TODO: Actually call runSwarmWithSignal here
-  // For now, simulate a run that completes after a delay
-  setTimeout(() => {
-    const current = store.getRunState(runId)
-    if (current && current.status === "running") {
+  const cliOptions = buildCliOptions({ body, runId, outDir, routesPath, instructionsPath })
+  await loadEnvFile(repoRoot())
+
+  void runSwarmWithSignal(cliOptions, state.controller?.signal)
+    .then((result) => {
+      const current = store.getRunState(runId)
+      if (!current || current.status === "cancelled") {
+        return
+      }
       current.status = "succeeded"
       current.endedAt = new Date().toISOString()
-      current.finalReportPath = path.join(outDir, "final-report.md")
-    }
-  }, 5000)
+      current.finalReportPath = result.finalReportPath
+      current.metricsPath = result.metricsPath
+      current.benchmarkJsonPath = result.benchmarkJsonPath
+      current.benchmarkCsvPath = result.benchmarkCsvPath
+    })
+    .catch((error: unknown) => {
+      const current = store.getRunState(runId)
+      if (!current) {
+        return
+      }
+      current.status = current.controller?.signal.aborted ? "cancelled" : "failed"
+      current.endedAt = new Date().toISOString()
+      current.error = current.controller?.signal.aborted
+        ? "Run cancelled by user."
+        : error instanceof Error
+          ? error.message
+          : String(error)
+    })
 
   setResponseStatus(event, 202)
-  const { controller: _, ...publicState } = state
-  return publicState
+  return publicRunState(state)
 })

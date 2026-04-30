@@ -1,5 +1,8 @@
 node_modules
 .DS_Store
+build
+coverage
+docs
 dist
 dist-ssr
 *.local

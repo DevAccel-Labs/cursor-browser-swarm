@@ -1,6 +1,12 @@
 node_modules
+build
 dist
 coverage
+docs
+.nitro
+.output
+.tanstack
+.vinxi
 .env
 .env.local
 .swarm
