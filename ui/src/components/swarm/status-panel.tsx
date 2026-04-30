@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Check, ChevronDown, Clipboard } from "lucide-react"
 import type { AgentFindingPreview, AgentReportPreview, SwarmEvent, UiRunState } from "@/lib/types"
 import { MarkdownReport } from "@/components/swarm/markdown-report"
@@ -22,6 +22,23 @@ function formatTime(timestamp?: string): string {
   } catch {
     return ""
   }
+}
+
+function formatDuration(ms: number): string {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000))
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+
+  if (hours > 0) {
+    return `${hours}h ${minutes}m ${seconds}s`
+  }
+
+  if (minutes > 0) {
+    return `${minutes}m ${seconds}s`
+  }
+
+  return `${seconds}s`
 }
 
 function parseEvents(rawEvents: string): Array<SwarmEvent> {
@@ -163,8 +180,27 @@ function LiveReportPreview({ reports }: { reports: AgentReportPreview[] }) {
 
 export function StatusPanel({ runState, events, report, previewReports }: StatusPanelProps) {
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle")
+  const [nowMs, setNowMs] = useState(() => Date.now())
   const parsedEvents = useMemo(() => parseEvents(events), [events])
   const groupedEvents = useMemo(() => groupEventsByAgent(parsedEvents), [parsedEvents])
+  const wallClock = useMemo(() => {
+    if (!runState?.startedAt) return undefined
+
+    const startedMs = Date.parse(runState.startedAt)
+    if (Number.isNaN(startedMs)) return undefined
+
+    const endedMs = runState.endedAt ? Date.parse(runState.endedAt) : nowMs
+    if (Number.isNaN(endedMs)) return undefined
+
+    return formatDuration(endedMs - startedMs)
+  }, [nowMs, runState?.endedAt, runState?.startedAt])
+
+  useEffect(() => {
+    if (runState?.status !== "running") return
+
+    const intervalId = window.setInterval(() => setNowMs(Date.now()), 1000)
+    return () => window.clearInterval(intervalId)
+  }, [runState?.status])
 
   const copyFinalReport = async () => {
     if (!report) return
@@ -264,7 +300,10 @@ export function StatusPanel({ runState, events, report, previewReports }: Status
       {/* Final Report */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-3 pb-3">
-          <CardTitle className="text-base">Final Report</CardTitle>
+          <div className="flex flex-wrap items-center gap-3">
+            <CardTitle className="text-base">Final Report</CardTitle>
+            {wallClock && <Badge variant="secondary">Wall clock: {wallClock}</Badge>}
+          </div>
           {report && (
             <Button variant="outline" size="xs" onClick={copyFinalReport}>
               {copyState === "copied" ? (
