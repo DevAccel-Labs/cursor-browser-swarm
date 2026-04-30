@@ -19,8 +19,9 @@ describe("config", () => {
     expect(options.agentConcurrency).toBe("auto");
     expect(options.assignmentStrategy).toBe("replicate");
     expect(options.agentDirectives).toEqual([]);
-    expect(options.mode).toBe("dry-run");
-    expect(options.chromeMode).toBe("playwright");
+    expect(options.mode).toBe("cursor-cli");
+    expect(options.chromeMode).toBe("axi");
+    expect(options.agentCommand).toBe("agent");
     expect(options.model).toBe("composer-2");
     expect(options.routesPath.endsWith("swarm.routes.json")).toBe(true);
   });

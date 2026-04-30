@@ -7,6 +7,7 @@
   "properties": {
     "version": { "const": "0.1" },
     "route": { "type": "string", "minLength": 1 },
+    "intent": { "type": "string", "minLength": 1 },
     "componentStack": {
       "type": "array",
       "items": { "type": "string" },
@@ -17,7 +18,24 @@
       "items": { "type": "string" },
       "default": []
     },
+    "target": {
+      "type": "object",
+      "properties": {
+        "role": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "text": { "type": "string", "minLength": 1 },
+        "selector": { "type": "string", "minLength": 1 },
+        "testId": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
     "dom": { "type": "string" },
+    "accessibilitySnapshot": { "type": "string" },
+    "nearbyText": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": []
+    },
     "bbox": {
       "type": "object",
       "required": ["x", "y", "width", "height"],
@@ -30,6 +48,37 @@
       "additionalProperties": false
     },
     "screenshotPath": { "type": "string" },
+    "relatedArtifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path"],
+        "properties": {
+          "path": { "type": "string", "minLength": 1 },
+          "kind": {
+            "enum": ["screenshot", "console", "network", "trace", "report", "other"]
+          },
+          "note": { "type": "string" }
+        },
+        "additionalProperties": false
+      },
+      "default": []
+    },
+    "preconditions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": []
+    },
+    "observations": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": []
+    },
+    "debugHints": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": []
+    },
     "notes": { "type": "string" }
   },
   "additionalProperties": false

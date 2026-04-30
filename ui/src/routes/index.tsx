@@ -182,6 +182,7 @@ function SwarmDashboard() {
         mode: formState.mode,
         chromeMode: formState.chromeMode,
         model: formState.model,
+        agentCommand: formState.agentCommand,
         cursorCommand: formState.cursorCommand,
         maxRouteSteps: formState.maxRouteSteps,
         assignmentStrategy: formState.assignmentStrategy,

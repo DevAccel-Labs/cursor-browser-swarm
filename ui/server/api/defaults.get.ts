@@ -70,6 +70,7 @@ export default eventHandler(async () => {
     model: "composer-2-fast",
     models: fallbackModels,
     modelSource: "fallback" as const,
+    agentCommand: "agent",
     cursorCommand: "agent",
     maxRouteSteps: 12,
     axiPortBase: "",

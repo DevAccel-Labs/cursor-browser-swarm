@@ -77,7 +77,7 @@ function browserToolInstructions(
       ].join("\n");
     case "playwright":
       return [
-        "Use the provided Playwright/dry-run evidence collector if available.",
+        "Use the provided Playwright evidence collector if available.",
         "Still behave like a QA-minded browser validation agent.",
       ].join("\n");
     default: {
@@ -182,7 +182,7 @@ function formatCausalityRules(): string {
     "- Use the same rootCauseKey for findings that likely share one root cause. Mark secondary fallout as downstream-symptom instead of duplicating it as a separate top-level bug.",
     "- Use needs-clean-repro for issues that may be caused by injected seed bugs, prior state, or unusual navigation. These should be retested on a clean baseline before being treated as product bugs.",
     "- Use observability for swallowed errors, noisy logs, or missing diagnostics that are useful but not necessarily the user-facing root failure.",
-    "- Use tooling for AXI, Chrome, browser bridge, Cursor CLI, or harness failures. Tooling findings are not application bugs.",
+    "- Use tooling for AXI, Chrome, browser bridge, agent CLI, or harness failures. Tooling findings are not application bugs.",
   ].join("\n");
 }
 
@@ -250,6 +250,42 @@ function formatSecretReferences(secrets: SwarmSecret[], prefix: string): string 
     .join("\n");
 }
 
+function formatPacketList(label: string, values: string[]): string | undefined {
+  if (values.length === 0) {
+    return undefined;
+  }
+  return [`- ${label}:`, ...values.map((value) => `  - ${value}`)].join("\n");
+}
+
+function formatPacketTarget(packet: ContextPacket): string | undefined {
+  if (!packet.target) {
+    return undefined;
+  }
+  const entries = [
+    packet.target.role ? `role=${packet.target.role}` : undefined,
+    packet.target.name ? `name=${packet.target.name}` : undefined,
+    packet.target.text ? `text=${packet.target.text}` : undefined,
+    packet.target.selector ? `selector=${packet.target.selector}` : undefined,
+    packet.target.testId ? `testId=${packet.target.testId}` : undefined,
+  ].filter((entry): entry is string => Boolean(entry));
+  return entries.length > 0 ? `- Target: ${entries.join(", ")}` : undefined;
+}
+
+function formatPacketArtifacts(packet: ContextPacket): string | undefined {
+  const artifacts = packet.relatedArtifacts ?? [];
+  if (artifacts.length === 0) {
+    return undefined;
+  }
+  return [
+    "- Related artifacts:",
+    ...artifacts.map((artifact) => {
+      const kind = artifact.kind ? `${artifact.kind}: ` : "";
+      const note = artifact.note ? ` (${artifact.note})` : "";
+      return `  - ${kind}${artifact.path}${note}`;
+    }),
+  ].join("\n");
+}
+
 function formatContextPacket(packet: ContextPacket | undefined): string {
   if (!packet) {
     return "";
@@ -258,13 +294,23 @@ function formatContextPacket(packet: ContextPacket | undefined): string {
   return [
     "ReactGrab context packet:",
     `- Route: ${packet.route}`,
+    packet.intent ? `- Intent: ${packet.intent}` : undefined,
     `- Component stack: ${packet.componentStack.join(" > ") || "unknown"}`,
     `- Source files: ${packet.sourceFiles.join(", ") || "unknown"}`,
+    formatPacketTarget(packet),
     packet.notes ? `- Notes: ${packet.notes}` : undefined,
+    formatPacketList("Preconditions", packet.preconditions ?? []),
+    formatPacketList("Nearby text", packet.nearbyText ?? []),
+    formatPacketList("Observations", packet.observations ?? []),
+    formatPacketList("Debug hints", packet.debugHints ?? []),
     packet.bbox
       ? `- BBox: x=${packet.bbox.x}, y=${packet.bbox.y}, width=${packet.bbox.width}, height=${packet.bbox.height}`
       : undefined,
     packet.screenshotPath ? `- Screenshot: ${packet.screenshotPath}` : undefined,
+    formatPacketArtifacts(packet),
+    packet.accessibilitySnapshot
+      ? `- Accessibility snapshot:\n${packet.accessibilitySnapshot}`
+      : undefined,
   ]
     .filter((line): line is string => Boolean(line))
     .join("\n");

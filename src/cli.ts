@@ -14,7 +14,7 @@ const program = new Command();
 
 program
   .name("cursor-browser-swarm")
-  .description("Parallel browser validation for Cursor agents.")
+  .description("Parallel browser validation for CLI-backed agents.")
   .version("0.1.0");
 
 program
@@ -48,11 +48,12 @@ program
     collect,
     [],
   )
-  .option("--mode <mode>", "dry-run, cursor-cli, cursor-sdk, or cloud-api.", "dry-run")
+  .option("--mode <mode>", "cursor-cli, copilot-cli, or custom-cli.", "cursor-cli")
   .option("--run-id <id>", "Deterministic run id.")
   .option("--out-dir <path>", "Output directory.")
-  .option("--cursor-command <command>", "Cursor CLI command.", "agent")
-  .option("--model <model>", "Cursor model to request for agent runs.")
+  .option("--agent-command <command>", "Agent CLI command.")
+  .option("--cursor-command <command>", "Deprecated alias for --agent-command.")
+  .option("--model <model>", "Model to request for agent runs when the selected CLI supports it.")
   .option("--chrome-mode <mode>", "playwright, devtools-mcp, or axi.")
   .option("--axi-port-base <port>", "First local port used for isolated per-agent AXI bridges.")
   .option("--max-route-steps <number>", "Max safe interactions per route.", "12")
@@ -60,7 +61,7 @@ program
   .action(async (options: Record<string, unknown>) => {
     try {
       const result = await runSwarm(parseCliOptions(options));
-      console.log(pc.green("Cursor Browser Swarm run complete."));
+      console.log(pc.green("Browser Swarm run complete."));
       console.log(`Run id: ${result.config.runId}`);
       console.log(`Output: ${result.config.outDir}`);
       console.log(`Final report: ${result.finalReportPath}`);
@@ -82,7 +83,7 @@ program
         host: options.host,
         port: Number.parseInt(options.port, 10),
       });
-      console.log(pc.green("Cursor Browser Swarm UI is running."));
+      console.log(pc.green("Browser Swarm UI is running."));
       console.log(`Open: ${server.url}`);
     } catch (error) {
       console.error(pc.red(error instanceof Error ? error.message : String(error)));

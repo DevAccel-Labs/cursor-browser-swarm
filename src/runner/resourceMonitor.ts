@@ -74,22 +74,8 @@ export function estimateInitialConcurrency(input: {
     };
   }
 
-  const perAgentMemoryMb =
-    input.mode === "cursor-cli" && input.chromeMode === "axi"
-      ? 1_200
-      : input.mode === "cloud-api"
-        ? 250
-        : input.mode === "dry-run"
-          ? 700
-          : 500;
-  const perAgentCpu =
-    input.mode === "cursor-cli" && input.chromeMode === "axi"
-      ? 1.25
-      : input.mode === "cloud-api"
-        ? 0.25
-        : input.mode === "dry-run"
-          ? 0.75
-          : 0.5;
+  const perAgentMemoryMb = input.chromeMode === "axi" ? 1_200 : 500;
+  const perAgentCpu = input.chromeMode === "axi" ? 1.25 : 0.5;
   const memoryBudgetMb = Math.max(
     input.snapshot.totalMemoryMb * 0.5,
     input.snapshot.freeMemoryMb * 0.8,

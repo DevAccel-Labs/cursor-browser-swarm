@@ -55,18 +55,40 @@ const bboxSchema = z.object({
   height: z.number().positive(),
 });
 
+const contextPacketTargetSchema = z.object({
+  role: z.string().min(1).optional(),
+  name: z.string().min(1).optional(),
+  text: z.string().min(1).optional(),
+  selector: z.string().min(1).optional(),
+  testId: z.string().min(1).optional(),
+});
+
+const contextPacketArtifactSchema = z.object({
+  path: z.string().min(1),
+  kind: z.enum(["screenshot", "console", "network", "trace", "report", "other"]).optional(),
+  note: z.string().optional(),
+});
+
 const contextPacketSchema = z.object({
-  version: z.string().min(1),
+  version: z.literal("0.1"),
   route: z.string().min(1),
+  intent: z.string().min(1).optional(),
   componentStack: z.array(z.string()).default([]),
   sourceFiles: z.array(z.string()).default([]),
+  target: contextPacketTargetSchema.optional(),
   dom: z.string().optional(),
+  accessibilitySnapshot: z.string().optional(),
+  nearbyText: z.array(z.string()).default([]),
   bbox: bboxSchema.optional(),
   screenshotPath: z.string().optional(),
+  relatedArtifacts: z.array(contextPacketArtifactSchema).default([]),
+  preconditions: z.array(z.string()).default([]),
+  observations: z.array(z.string()).default([]),
+  debugHints: z.array(z.string()).default([]),
   notes: z.string().optional(),
 });
 
-const runModeSchema = z.enum(["dry-run", "cursor-cli", "cursor-sdk", "cloud-api"]);
+const runModeSchema = z.enum(["cursor-cli", "copilot-cli", "custom-cli"]);
 
 const chromeModeSchema = z.enum(["playwright", "devtools-mcp", "axi"]);
 
@@ -105,6 +127,21 @@ export async function loadContextPacket(packetPath: string): Promise<ContextPack
 
 export function parseRunMode(value: string): RunMode {
   return runModeSchema.parse(value);
+}
+
+function defaultAgentCommand(mode: RunMode): string {
+  switch (mode) {
+    case "cursor-cli":
+      return "agent";
+    case "copilot-cli":
+      return "copilot";
+    case "custom-cli":
+      return "agent";
+    default: {
+      const exhaustive: never = mode;
+      return exhaustive;
+    }
+  }
 }
 
 export function parseAgents(value: string): number {
@@ -170,7 +207,7 @@ function parseCustomAgentDirectives(value: unknown): AgentDirective[] {
 }
 
 export function parseCliOptions(options: Record<string, unknown>): SwarmCliOptions {
-  const mode = parseRunMode(String(options.mode ?? "dry-run"));
+  const mode = parseRunMode(String(options.mode ?? "cursor-cli"));
   const chromeMode = chromeModeSchema.parse(String(options.chromeMode ?? defaultChromeMode(mode)));
   const agents = parseAgents(String(options.agents ?? "4"));
   const maxRouteSteps = parseRouteSteps(String(options.maxRouteSteps ?? "12"));
@@ -211,7 +248,10 @@ export function parseCliOptions(options: Record<string, unknown>): SwarmCliOptio
     mode,
     runId: options.runId ? String(options.runId) : undefined,
     outDir: options.outDir ? path.resolve(String(options.outDir)) : undefined,
-    cursorCommand: String(options.cursorCommand ?? "agent"),
+    agentCommand: String(
+      options.agentCommand ?? options.cursorCommand ?? defaultAgentCommand(mode),
+    ),
+    cursorCommand: options.cursorCommand ? String(options.cursorCommand) : undefined,
     model: options.model ? String(options.model) : undefined,
     chromeMode,
     axiPortBase: options.axiPortBase ? parseAxiPortBase(String(options.axiPortBase)) : undefined,
@@ -225,13 +265,10 @@ export function parseCliOptions(options: Record<string, unknown>): SwarmCliOptio
 
 export function defaultChromeMode(mode: RunMode): "playwright" | "devtools-mcp" | "axi" {
   switch (mode) {
-    case "dry-run":
-      return "playwright";
     case "cursor-cli":
+    case "copilot-cli":
+    case "custom-cli":
       return "axi";
-    case "cursor-sdk":
-    case "cloud-api":
-      return "playwright";
     default: {
       const exhaustive: never = mode;
       return exhaustive;

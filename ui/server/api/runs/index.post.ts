@@ -36,6 +36,7 @@ interface RunRequest {
   mode?: string
   chromeMode?: string
   model?: string
+  agentCommand?: string
   cursorCommand?: string
   noDevServer?: boolean
   maxRouteSteps?: number | string
@@ -126,7 +127,11 @@ function buildCliOptions(input: {
     mode,
     runId: input.runId,
     outDir: input.outDir,
-    cursorCommand: input.body.cursorCommand?.trim() || "agent",
+    agentCommand:
+      input.body.agentCommand?.trim() ||
+      input.body.cursorCommand?.trim() ||
+      (mode === "copilot-cli" ? "copilot" : "agent"),
+    cursorCommand: input.body.cursorCommand?.trim() || undefined,
     model: input.body.model?.trim() || undefined,
     chromeMode,
     axiPortBase: parseOptionalAxiPortBase(input.body.axiPortBase),

@@ -16,19 +16,16 @@ import { summarizeFindings } from "../artifacts/summarizeFindings.js";
 import { writeRunReport } from "../artifacts/writeRunReport.js";
 import { runAxiPreflight } from "../browser/axiPreflight.js";
 import { loadContextPacket, loadRouteConfig, mergeBaseUrl, readOptionalText } from "../config.js";
-import { CloudApiCursorAgentClient } from "../cursor/cloudApiClient.js";
 import { writeAxiHelper } from "../cursor/axiHelper.js";
-import { CliCursorAgentClient, writeCursorMcpConfig } from "../cursor/cliClient.js";
-import { DryRunCursorAgentClient } from "../cursor/dryRunClient.js";
+import { CliAgentClient, writeCursorMcpConfig } from "../cursor/cliClient.js";
 import { buildMissionPrompt } from "../cursor/missionPrompt.js";
-import { SdkCursorAgentClient } from "../cursor/sdkClient.js";
 import { createRunLogger } from "../observability.js";
 import { resolveAgentDirectives } from "./agentDirectives.js";
 import type {
   AgentAssignment,
   AgentRunReport,
   BrowserSession,
-  CursorAgentClient,
+  AgentClient,
   RouteConfig,
   SwarmCliOptions,
   SwarmRunConfig,
@@ -439,20 +436,12 @@ export function defaultOutDir(appName: string, runId: string): string {
   return path.join(homedir(), ".cursor-browser-swarm", "runs", safePathSegment(appName), runId);
 }
 
-function createClient(config: SwarmRunConfig): CursorAgentClient {
+function createClient(config: SwarmRunConfig): AgentClient {
   switch (config.mode) {
-    case "dry-run":
-      return new DryRunCursorAgentClient();
     case "cursor-cli":
-      return new CliCursorAgentClient(config.cursorCommand);
-    case "cursor-sdk":
-      return config.model
-        ? new SdkCursorAgentClient({ model: config.model })
-        : new SdkCursorAgentClient();
-    case "cloud-api":
-      return config.model
-        ? new CloudApiCursorAgentClient({ model: config.model })
-        : new CloudApiCursorAgentClient();
+    case "copilot-cli":
+    case "custom-cli":
+      return new CliAgentClient(config.mode, config.agentCommand);
     default: {
       const exhaustive: never = config.mode;
       return exhaustive;
@@ -500,6 +489,7 @@ function resolveRunConfig(
     mode: cli.mode,
     runId,
     outDir: cli.outDir ?? defaultOutDir(routeConfig.appName, runId),
+    agentCommand: cli.agentCommand,
     cursorCommand: cli.cursorCommand,
     model: cli.model,
     chromeMode: cli.chromeMode,
@@ -583,7 +573,7 @@ export async function runSwarmWithSignal(
       await writeCursorMcpConfig(config.repoPath);
       await logger.info("Wrote Cursor MCP config", { repoPath: config.repoPath });
     }
-    if (config.mode === "cursor-cli" && config.chromeMode === "axi") {
+    if (config.chromeMode === "axi") {
       await logger.info("Running AXI preflight", { baseUrl: config.baseUrl });
       const preflightStartedAt = Date.now();
       try {
@@ -702,7 +692,7 @@ export async function runSwarmWithSignal(
             portCollisions += 1;
           }
           await writeAxiHelper(agentPaths);
-          if (config.mode === "cursor-cli" && config.chromeMode === "axi") {
+          if (config.chromeMode === "axi") {
             const startup = await startAxiBridge(browserSession);
             browserSession.axiStartupMs = startup.startupMs;
             browserSession.axiStartupFailed = startup.failed;
@@ -786,7 +776,7 @@ export async function runSwarmWithSignal(
             }
           );
         } finally {
-          if (config.mode === "cursor-cli" && config.chromeMode === "axi") {
+          if (config.chromeMode === "axi") {
             const stoppedPids = await stopAxiBridgeForPort(browserSession.axiPort);
             if (stoppedPids.length > 0) {
               await logger.info("Stopped AXI bridge for agent", {
@@ -814,7 +804,7 @@ export async function runSwarmWithSignal(
       reports,
     });
     await writeRunReport(summary, artifacts.runDir);
-    if (config.mode === "cursor-cli" && config.chromeMode === "axi") {
+    if (config.chromeMode === "axi") {
       const cleanup = await cleanupRunBrowserTools({
         runDir: artifacts.runDir,
         axiPorts: plannedAxiPorts(config),
@@ -869,7 +859,7 @@ export async function runSwarmWithSignal(
   } finally {
     clearInterval(memorySampler);
     resourceSampler.stop();
-    if (config.mode === "cursor-cli" && config.chromeMode === "axi") {
+    if (config.chromeMode === "axi") {
       const cleanup = await cleanupRunBrowserTools({
         runDir: artifacts.runDir,
         axiPorts: plannedAxiPorts(config),

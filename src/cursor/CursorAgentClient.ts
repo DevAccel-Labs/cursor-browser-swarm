@@ -1,4 +1,5 @@
 export type {
+  AgentClient,
   CreateRunInput,
   CreateRunResult,
   CursorAgentClient,

@@ -9,12 +9,13 @@ import type {
   AgentAssignment,
   AgentRunReport,
   AgentRunTelemetry,
+  AgentClient,
   CreateRunInput,
   CreateRunResult,
-  CursorAgentClient,
   EvidenceManifest,
   FindingClassification,
   Finding,
+  RunMode,
   RunStatus,
   SwarmSecret,
 } from "../types.js";
@@ -41,6 +42,7 @@ function redact(value: string, secrets: SwarmSecret[]): string {
 function makeCliReport(input: {
   agentId: string;
   assignment: AgentAssignment;
+  mode: RunMode;
   artifactPaths: AgentArtifactPaths;
   status: "succeeded" | "failed" | "cancelled";
   evidenceStatus?: "verified" | "partial" | "missing";
@@ -53,7 +55,7 @@ function makeCliReport(input: {
   return {
     agentId: input.agentId,
     assignment: input.assignment,
-    mode: "cursor-cli",
+    mode: input.mode,
     status: input.status,
     evidenceStatus: input.evidenceStatus ?? "missing",
     evidenceScore: input.evidenceScore ?? "weak",
@@ -651,11 +653,52 @@ async function verifyCliEvidence(input: {
   };
 }
 
-export class CliCursorAgentClient implements CursorAgentClient {
-  public constructor(private readonly cursorCommand: string) {}
+function cliLabel(mode: RunMode): string {
+  switch (mode) {
+    case "cursor-cli":
+      return "Cursor CLI";
+    case "copilot-cli":
+      return "Copilot CLI";
+    case "custom-cli":
+      return "custom CLI";
+    default: {
+      const exhaustive: never = mode;
+      return exhaustive;
+    }
+  }
+}
+
+function buildCliArgs(input: CreateRunInput): string[] {
+  switch (input.mode) {
+    case "cursor-cli": {
+      const args = ["--print", "--trust", "--approve-mcps"];
+      if (input.chromeMode === "axi" || input.chromeMode === "devtools-mcp") {
+        args.push("--force");
+      }
+      if (input.model) {
+        args.push("--model", input.model);
+      }
+      args.push(input.missionPrompt);
+      return args;
+    }
+    case "copilot-cli":
+    case "custom-cli":
+      return [input.missionPrompt];
+    default: {
+      const exhaustive: never = input.mode;
+      return exhaustive;
+    }
+  }
+}
+
+export class CliAgentClient implements AgentClient {
+  public constructor(
+    private readonly mode: RunMode,
+    private readonly agentCommand: string,
+  ) {}
 
   public async createRun(input: CreateRunInput): Promise<CreateRunResult> {
-    if (input.chromeMode === "devtools-mcp") {
+    if (input.mode === "cursor-cli" && input.chromeMode === "devtools-mcp") {
       await writeChromeDevtoolsMcpConfig(input.repoPath);
     }
     await writeTextFile(input.artifactPaths.promptPath, input.missionPrompt);
@@ -689,21 +732,15 @@ export class CliCursorAgentClient implements CursorAgentClient {
         : {}),
     };
 
-    const args = ["--print", "--trust", "--approve-mcps"];
-    if (input.chromeMode === "axi" || input.chromeMode === "devtools-mcp") {
-      args.push("--force");
-    }
-    if (input.model) {
-      args.push("--model", input.model);
-    }
-    args.push(input.missionPrompt);
+    const args = buildCliArgs(input);
+    const label = cliLabel(this.mode);
     const startedAt = new Date().toISOString();
     try {
       await appendAgentEvent({
         eventsPath: input.eventsPath,
         agentId: input.agentId,
         phase: "start",
-        message: `Launching Cursor CLI for ${input.agentId}`,
+        message: `Launching ${label} for ${input.agentId}`,
       });
       await writeTextFile(input.artifactPaths.stdoutPath, "");
       await writeTextFile(input.artifactPaths.stderrPath, "");
@@ -774,7 +811,7 @@ export class CliCursorAgentClient implements CursorAgentClient {
           context: { silentForMs },
         });
       }, 30_000);
-      const subprocess = execa(this.cursorCommand, args, {
+      const subprocess = execa(this.agentCommand, args, {
         cwd: input.repoPath,
         env,
         reject: false,
@@ -825,11 +862,12 @@ export class CliCursorAgentClient implements CursorAgentClient {
           eventsPath: input.eventsPath,
           agentId: input.agentId,
           phase: "cancelled",
-          message: `${input.agentId} cancelled; Cursor CLI subprocess was terminated.`,
+          message: `${input.agentId} cancelled; ${label} subprocess was terminated.`,
         });
         const report = makeCliReport({
           agentId: input.agentId,
           assignment: input.assignment,
+          mode: input.mode,
           artifactPaths: input.artifactPaths,
           status: "cancelled",
           evidenceStatus: "missing",
@@ -923,7 +961,7 @@ export class CliCursorAgentClient implements CursorAgentClient {
         context: { exitCode: result.exitCode, evidenceStatus: verification.status },
       });
       const notes = [
-        `Cursor CLI exited with code ${result.exitCode}.`,
+        `${label} exited with code ${result.exitCode}.`,
         `Evidence status: ${verification.status}.`,
         `Evidence quality: ${verification.score}.`,
         ...verification.notes,
@@ -943,6 +981,7 @@ export class CliCursorAgentClient implements CursorAgentClient {
       const report = makeCliReport({
         agentId: input.agentId,
         assignment: input.assignment,
+        mode: input.mode,
         artifactPaths: input.artifactPaths,
         status,
         evidenceStatus: verification.status,
@@ -963,18 +1002,19 @@ export class CliCursorAgentClient implements CursorAgentClient {
         eventsPath: input.eventsPath,
         agentId: input.agentId,
         phase: "failed",
-        message: `Failed to spawn Cursor CLI command "${this.cursorCommand}"`,
+        message: `Failed to spawn ${label} command "${this.agentCommand}"`,
         context: { error: message },
       });
       const report = makeCliReport({
         agentId: input.agentId,
         assignment: input.assignment,
+        mode: input.mode,
         artifactPaths: input.artifactPaths,
         status: "failed",
         notes: [
-          `Failed to spawn Cursor CLI command "${this.cursorCommand}".`,
+          `Failed to spawn ${label} command "${this.agentCommand}".`,
           message,
-          "Install/login to Cursor CLI or pass --cursor-command with the correct binary.",
+          "Install/login to the selected agent CLI or pass --agent-command with the correct binary.",
         ],
       });
       await writeAgentReport(report);
@@ -986,10 +1026,12 @@ export class CliCursorAgentClient implements CursorAgentClient {
     return {
       runId,
       status: "succeeded",
-      message: "Cursor CLI subprocess completed synchronously.",
+      message: `${cliLabel(this.mode)} subprocess completed synchronously.`,
     };
   }
 }
+
+export const CliCursorAgentClient = CliAgentClient;
 
 export const writeCursorMcpConfig = writeChromeDevtoolsMcpConfig;
 

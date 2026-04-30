@@ -1,4 +1,4 @@
-export type RunMode = "dry-run" | "cursor-cli" | "cursor-sdk" | "cloud-api";
+export type RunMode = "cursor-cli" | "copilot-cli" | "custom-cli";
 
 export type SwarmMode = RunMode;
 
@@ -62,7 +62,8 @@ export interface SwarmCliOptions {
   mode: SwarmMode;
   runId?: string | undefined;
   outDir?: string | undefined;
-  cursorCommand: string;
+  agentCommand: string;
+  cursorCommand?: string | undefined;
   model?: string | undefined;
   chromeMode: ChromeMode;
   axiPortBase?: number | undefined;
@@ -98,7 +99,8 @@ export interface SwarmRunConfig {
   mode: SwarmMode;
   runId: string;
   outDir: string;
-  cursorCommand: string;
+  agentCommand: string;
+  cursorCommand?: string | undefined;
   model?: string | undefined;
   chromeMode: ChromeMode;
   axiPortBase: number;
@@ -478,18 +480,30 @@ export interface RunStatus {
   message?: string | undefined;
 }
 
-export interface CursorAgentClient {
+export interface AgentClient {
   createRun(input: CreateRunInput): Promise<CreateRunResult>;
   getRun(runId: string): Promise<RunStatus>;
   streamLogs?(runId: string): AsyncIterable<string>;
 }
 
+export type CursorAgentClient = AgentClient;
+
 export interface ContextPacket {
   version: "0.1";
   route: string;
+  intent?: string;
   componentStack: string[];
   sourceFiles: string[];
+  target?: {
+    role?: string;
+    name?: string;
+    text?: string;
+    selector?: string;
+    testId?: string;
+  };
   dom?: string;
+  accessibilitySnapshot?: string;
+  nearbyText?: string[];
   bbox?: {
     x: number;
     y: number;
@@ -497,5 +511,13 @@ export interface ContextPacket {
     height: number;
   };
   screenshotPath?: string;
+  relatedArtifacts?: Array<{
+    path: string;
+    kind?: "screenshot" | "console" | "network" | "trace" | "report" | "other";
+    note?: string;
+  }>;
+  preconditions?: string[];
+  observations?: string[];
+  debugHints?: string[];
   notes?: string;
 }

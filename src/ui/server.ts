@@ -61,6 +61,7 @@ interface UiRunRequest {
   mode?: string | undefined;
   chromeMode?: string | undefined;
   model?: string | undefined;
+  agentCommand?: string | undefined;
   noDevServer?: boolean | undefined;
   devCommand?: string | undefined;
   cursorCommand?: string | undefined;
@@ -158,13 +159,26 @@ function parseUiRunMode(value: string | undefined): RunMode {
   const mode = value ?? "cursor-cli";
   switch (mode) {
     case "cursor-cli":
-    case "cursor-sdk":
-    case "cloud-api":
+    case "copilot-cli":
+    case "custom-cli":
       return mode;
-    case "dry-run":
-      return "cursor-cli";
     default:
-      throw new Error("UI mode must be cursor-cli, cursor-sdk, or cloud-api.");
+      throw new Error("UI mode must be cursor-cli, copilot-cli, or custom-cli.");
+  }
+}
+
+function defaultAgentCommand(mode: RunMode): string {
+  switch (mode) {
+    case "cursor-cli":
+      return "agent";
+    case "copilot-cli":
+      return "copilot";
+    case "custom-cli":
+      return "agent";
+    default: {
+      const exhaustive: never = mode;
+      return exhaustive;
+    }
   }
 }
 
@@ -524,7 +538,11 @@ async function createRunFromRequest(input: UiRunRequest): Promise<UiRunState> {
     mode,
     runId,
     outDir,
-    cursorCommand: textOrUndefined(input.cursorCommand) ?? "agent",
+    agentCommand:
+      textOrUndefined(input.agentCommand) ??
+      textOrUndefined(input.cursorCommand) ??
+      defaultAgentCommand(mode),
+    cursorCommand: textOrUndefined(input.cursorCommand),
     chromeMode,
     ...(axiPortBaseInput ? { axiPortBase: parseAxiPortBase(axiPortBaseInput) } : {}),
     maxRouteSteps: parseRouteSteps(String(input.maxRouteSteps ?? "12")),
@@ -596,8 +614,9 @@ async function handleApiRequest(
   url: URL,
 ): Promise<void> {
   if (request.method === "GET" && url.pathname === "/api/defaults") {
-    const cursorCommand = url.searchParams.get("cursorCommand") ?? "agent";
-    const modelResult = await listCursorModels(cursorCommand);
+    const agentCommand =
+      url.searchParams.get("agentCommand") ?? url.searchParams.get("cursorCommand") ?? "agent";
+    const modelResult = await listCursorModels(agentCommand);
     sendJson(response, 200, {
       baseUrl: "http://localhost:3000",
       appName: "My App",
@@ -618,7 +637,8 @@ async function handleApiRequest(
       models: modelResult.models,
       modelSource: modelResult.source,
       modelError: modelResult.error,
-      cursorCommand,
+      agentCommand,
+      cursorCommand: agentCommand,
       maxRouteSteps: 12,
       axiPortBase: "",
       secretsEnvPrefix: "SWARM_SECRET_",
@@ -782,7 +802,7 @@ const html = `<!doctype html>
             <button type="button" id="view-activity" class="view-btn">Activity Log</button>
           </div>
         </div>
-        <p class="lede">Point at a running app, describe the routes, choose the model, and let Cursor CLI agents validate with AXI browser tooling.</p>
+        <p class="lede">Point at a running app, describe the routes, choose the model, and let CLI-backed agents validate with AXI browser tooling.</p>
       </header>
       <div class="app-shell">
         <aside class="runs-sidebar">
@@ -854,8 +874,8 @@ Focus on console errors, failed network requests, visual breakage, and repro ste
             <label>Mode
               <select id="mode">
                 <option value="cursor-cli">Cursor CLI + AXI</option>
-                <option value="cursor-sdk">Cursor SDK</option>
-                <option value="cloud-api">Cloud API</option>
+                <option value="copilot-cli">Copilot CLI + AXI</option>
+                <option value="custom-cli">Custom CLI</option>
               </select>
             </label>
             <label>Chrome mode
@@ -867,7 +887,7 @@ Focus on console errors, failed network requests, visual breakage, and repro ste
             <label>Model
               <select id="model"></select>
             </label>
-            <label>Cursor command <input id="cursorCommand" /></label>
+            <label>Agent command <input id="agentCommand" /></label>
             <label>Max route steps <input id="maxRouteSteps" type="number" min="1" max="100" /></label>
             <label>AXI port base <input id="axiPortBase" placeholder="auto" /></label>
           </div>
@@ -1230,7 +1250,8 @@ function collectFormState() {
     mode: input("mode").value,
     chromeMode: input("chromeMode").value,
     model: input("model").value,
-    cursorCommand: input("cursorCommand").value,
+    agentCommand: input("agentCommand").value,
+    cursorCommand: input("agentCommand").value,
     maxRouteSteps: input("maxRouteSteps").value,
     axiPortBase: input("axiPortBase").value,
     noDevServer: input("noDevServer").checked,
@@ -1277,10 +1298,10 @@ async function loadDefaults() {
   input("assignmentStrategy").value = saved?.assignmentStrategy || defaults.assignmentStrategy;
   renderPersonaOptions(defaults.agentPersonaOptions, saved?.agentPersonas || defaults.agentPersonas);
   input("agentDirectives").value = saved?.agentDirectives || defaults.agentDirectives || "";
-  input("mode").value = saved?.mode === "dry-run" ? defaults.mode : saved?.mode || defaults.mode;
+  input("mode").value = saved?.mode || defaults.mode;
   input("chromeMode").value = saved?.chromeMode === "playwright" ? defaults.chromeMode : saved?.chromeMode || defaults.chromeMode;
   setModels(defaults.models || [{ id: defaults.model, name: defaults.model }], saved?.model || defaults.model);
-  input("cursorCommand").value = saved?.cursorCommand || defaults.cursorCommand;
+  input("agentCommand").value = saved?.agentCommand || saved?.cursorCommand || defaults.agentCommand || defaults.cursorCommand;
   input("maxRouteSteps").value = saved?.maxRouteSteps || defaults.maxRouteSteps;
   input("axiPortBase").value = saved?.axiPortBase || defaults.axiPortBase || "";
   input("instructions").value = saved?.instructions || input("instructions").value;
@@ -1480,11 +1501,7 @@ input("agentConcurrency").addEventListener("input", () => {
   updateRunPreview();
 });
 input("mode").addEventListener("change", () => {
-  if (input("mode").value === "cursor-cli") {
-    input("chromeMode").value = "axi";
-  } else if (input("mode").value === "dry-run") {
-    input("chromeMode").value = "playwright";
-  }
+  input("chromeMode").value = "axi";
   saveFormState();
 });
 

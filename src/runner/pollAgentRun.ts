@@ -1,4 +1,4 @@
-import type { CursorAgentClient, RunStatus, RunStatusKind } from "../types.js";
+import type { AgentClient, RunStatus, RunStatusKind } from "../types.js";
 
 function isTerminalStatus(status: RunStatusKind): boolean {
   switch (status) {
@@ -17,7 +17,7 @@ function isTerminalStatus(status: RunStatusKind): boolean {
 }
 
 export async function pollAgentRun(input: {
-  client: CursorAgentClient;
+  client: AgentClient;
   runId: string;
   intervalMs?: number;
   timeoutMs?: number;

@@ -50,11 +50,11 @@ Focus on console errors, failed network requests, visual breakage, and repro ste
 type ShareableConfig = Omit<FormState, "secrets">
 
 const assignmentStrategyOptions = ["replicate", "split"]
-const modeOptions = ["cursor-cli", "cursor-sdk", "cloud-api"]
+const modeOptions = ["cursor-cli", "copilot-cli", "custom-cli"]
 const chromeModeOptions = ["axi", "devtools-mcp"]
 
 function getShareableConfig(formState: FormState): ShareableConfig {
-  const { secrets, ...config } = formState
+  const { secrets: _secrets, ...config } = formState
   return config
 }
 
@@ -109,8 +109,10 @@ function getConfigurationGuide(defaults: DefaultsResponse | null) {
       chromeMode:
         "Browser automation integration. Use one of options.chromeModes.",
       model: "Agent model ID. Use one of options.models.",
+      agentCommand:
+        "CLI command invoked for the selected agent mode. Cursor defaults to agent; Copilot defaults to copilot.",
       cursorCommand:
-        "Cursor CLI command invoked for CLI-backed runs. Usually agent.",
+        "Deprecated alias for agentCommand. Prefer agentCommand in new configs.",
       maxRouteSteps:
         "Maximum browser/tool steps per route before an agent should stop and report.",
       axiPortBase:
@@ -137,12 +139,12 @@ function getConfigurationGuide(defaults: DefaultsResponse | null) {
           meaning: "Run Cursor CLI agents with browser automation.",
         },
         {
-          value: "cursor-sdk",
-          meaning: "Run through the Cursor SDK backend when available.",
+          value: "copilot-cli",
+          meaning: "Run Copilot CLI agents with browser automation.",
         },
         {
-          value: "cloud-api",
-          meaning: "Run through the cloud API backend when available.",
+          value: "custom-cli",
+          meaning: "Run another CLI agent command with the same artifact contract.",
         },
       ],
       chromeModes: [
@@ -274,6 +276,10 @@ function mergeConfigObject(
     mode: normalizeString(config.mode, previous.mode),
     chromeMode: normalizeString(config.chromeMode, previous.chromeMode),
     model: normalizeString(config.model, previous.model),
+    agentCommand: normalizeString(
+      config.agentCommand ?? config.cursorCommand,
+      previous.agentCommand
+    ),
     cursorCommand: normalizeString(
       config.cursorCommand,
       previous.cursorCommand
@@ -293,6 +299,19 @@ function isIntegerInRange(value: number, min: number, max: number) {
 
 function isAllowedOption(value: string, options: Array<string>) {
   return options.includes(value)
+}
+
+function defaultCommandForMode(mode: string) {
+  switch (mode) {
+    case "cursor-cli":
+      return "agent"
+    case "copilot-cli":
+      return "copilot"
+    case "custom-cli":
+      return "agent"
+    default:
+      return "agent"
+  }
 }
 
 function validateRawConfig(
@@ -360,6 +379,9 @@ function validateRawConfig(
   }
   if ("model" in config && typeof config.model !== "string") {
     errors.push("model must be a string.")
+  }
+  if ("agentCommand" in config && typeof config.agentCommand !== "string") {
+    errors.push("agentCommand must be a string.")
   }
   if ("cursorCommand" in config && typeof config.cursorCommand !== "string") {
     errors.push("cursorCommand must be a string.")
@@ -482,10 +504,10 @@ function validateRawConfig(
   }
 
   if (
-    typeof merged.cursorCommand !== "string" ||
-    !merged.cursorCommand.trim()
+    typeof merged.agentCommand !== "string" ||
+    !merged.agentCommand.trim()
   ) {
-    errors.push("cursorCommand is required.")
+    errors.push("agentCommand is required.")
   }
 
   if (!isIntegerInRange(merged.maxRouteSteps, 1, 100)) {
@@ -534,7 +556,18 @@ export function ConfigForm({
         : null
     if (saved) {
       try {
-        return JSON.parse(saved) as FormState
+        const parsed = JSON.parse(saved) as Partial<FormState>
+        const mode =
+          parsed.mode && modeOptions.includes(parsed.mode) ? parsed.mode : "cursor-cli"
+        const command =
+          parsed.agentCommand ?? parsed.cursorCommand ?? defaultCommandForMode(mode)
+        return {
+          ...parsed,
+          mode,
+          chromeMode: parsed.chromeMode === "devtools-mcp" ? "devtools-mcp" : "axi",
+          agentCommand: command,
+          cursorCommand: command,
+        } as FormState
       } catch {}
     }
     return {
@@ -557,6 +590,7 @@ export function ConfigForm({
       mode: "cursor-cli",
       chromeMode: "axi",
       model: "composer-2-fast",
+      agentCommand: "agent",
       cursorCommand: "agent",
       maxRouteSteps: 12,
       axiPortBase: "",
@@ -579,6 +613,7 @@ export function ConfigForm({
         mode: defaults.mode,
         chromeMode: defaults.chromeMode,
         model: defaults.model,
+        agentCommand: defaults.agentCommand,
         cursorCommand: defaults.cursorCommand,
         maxRouteSteps: defaults.maxRouteSteps,
       }))
@@ -1035,7 +1070,16 @@ export function ConfigForm({
                   <Label htmlFor="mode">Mode</Label>
                   <Select
                     value={formState.mode}
-                    onValueChange={(v) => updateField("mode", v)}
+                    onValueChange={(v) => {
+                      const command = defaultCommandForMode(v)
+                      setFormState((prev) => ({
+                        ...prev,
+                        mode: v,
+                        chromeMode: "axi",
+                        agentCommand: command,
+                        cursorCommand: command,
+                      }))
+                    }}
                   >
                     <SelectTrigger id="mode">
                       <SelectValue />
@@ -1044,8 +1088,10 @@ export function ConfigForm({
                       <SelectItem value="cursor-cli">
                         Cursor CLI + AXI
                       </SelectItem>
-                      <SelectItem value="cursor-sdk">Cursor SDK</SelectItem>
-                      <SelectItem value="cloud-api">Cloud API</SelectItem>
+                      <SelectItem value="copilot-cli">
+                        Copilot CLI + AXI
+                      </SelectItem>
+                      <SelectItem value="custom-cli">Custom CLI</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -1087,13 +1133,14 @@ export function ConfigForm({
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="cursorCommand">Cursor command</Label>
+                  <Label htmlFor="agentCommand">Agent command</Label>
                   <Input
-                    id="cursorCommand"
-                    value={formState.cursorCommand}
-                    onChange={(e) =>
+                    id="agentCommand"
+                    value={formState.agentCommand}
+                    onChange={(e) => {
+                      updateField("agentCommand", e.target.value)
                       updateField("cursorCommand", e.target.value)
-                    }
+                    }}
                   />
                 </div>
                 <div className="space-y-2">

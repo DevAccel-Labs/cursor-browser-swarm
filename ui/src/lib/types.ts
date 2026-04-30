@@ -86,8 +86,9 @@ export interface DefaultsResponse {
   chromeMode: string
   model: string
   models: ModelOption[]
-  modelSource: "cursor-cli" | "fallback"
+  modelSource: "agent-cli" | "cursor-cli" | "fallback"
   modelError?: string
+  agentCommand: string
   cursorCommand: string
   maxRouteSteps: number
   axiPortBase: string
@@ -109,6 +110,7 @@ export interface RunRequest {
   mode?: string
   chromeMode?: string
   model?: string
+  agentCommand?: string
   noDevServer?: boolean
   devCommand?: string
   cursorCommand?: string
@@ -161,6 +163,7 @@ export interface FormState {
   mode: string
   chromeMode: string
   model: string
+  agentCommand: string
   cursorCommand: string
   maxRouteSteps: number
   axiPortBase: string
