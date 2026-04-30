@@ -38,6 +38,7 @@ function sampleReport(reportPath: string): AgentRunReport {
         title: "Console error observed",
         route: "/dashboard",
         agentId: "agent-1",
+        findingKind: "product-bug",
         classification: "root-cause-candidate",
         rootCauseKey: "dashboard-console-error",
         observedBehavior: "Dashboard logs an uncaught client error after filter interaction.",
@@ -69,10 +70,11 @@ function sampleReport(reportPath: string): AgentRunReport {
         title: "Stale dashboard search text needs clean repro",
         route: "/dashboard",
         agentId: "agent-1",
+        findingKind: "scenario-blocked",
         classification: "needs-clean-repro",
         needsCleanRepro: true,
         severity: "low",
-        confidence: "medium",
+        confidence: "high",
         evidence: ["screenshots/dashboard.png"],
         reproSteps: ["Open /dashboard", "Reopen search"],
         likelyFiles: [],
@@ -82,6 +84,7 @@ function sampleReport(reportPath: string): AgentRunReport {
         title: "chrome-devtools-axi bridge timed out",
         route: "/dashboard",
         agentId: "agent-1",
+        findingKind: "harness-issue",
         classification: "tooling",
         rootCauseKey: "axi-timeout",
         observedBehavior: "AXI snapshot returned MCP -32001.",
@@ -152,14 +155,21 @@ describe("artifact reports", () => {
     expect(agentText).toContain("Fix readiness: ready");
     expect(agentText).toContain("Protocol evidence:");
     expect(agentText).toContain("Debug hints:");
-    expect(finalText).toContain("Issues found: 3");
+    expect(finalText).toContain("Issues found: 1");
+    expect(finalText).toContain("Likely real bugs: 1");
     expect(finalText).toContain("## Root-cause debrief");
+    expect(finalText).toContain("## Route coverage");
+    expect(finalText).toContain("Goal: Test dashboard");
+    expect(finalText).toContain("Covered by: agent-1 (succeeded, evidence: verified, quality: strong)");
+    expect(finalText).toContain("Findings on path: 1 application, 1 tooling");
     expect(finalText).toContain("### dashboard-console-error");
     expect(finalText).toContain("Related symptoms: Filter popover closes after the console error");
     expect(finalText).toContain("## All reported application issues");
     expect(finalText).toContain(
-      "Console error observed [root cause candidate] (medium, high; agent-1; /dashboard; group: dashboard-console-error)",
+      "Console error observed [Product bug; root cause candidate] (medium, high; agent-1; /dashboard; group: dashboard-console-error)",
     );
+    expect(finalText).toContain("## Scenario blocked / needs clean repro");
+    expect(finalText).toContain("Stale dashboard search text needs clean repro");
     expect(finalText).toContain("## Harness/tooling issues");
     expect(finalText).toContain("chrome-devtools-axi bridge timed out");
     expect(finalText).toContain("Evidence verified: 1");
@@ -178,6 +188,40 @@ describe("artifact reports", () => {
       needs_clean_repro: 1,
       tool_failures: 1,
     });
+  });
+
+  it("frames clean runs around covered route goals", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "swarm-clean-report-"));
+    const runPaths = createArtifactPaths(dir);
+    const paths = getAgentArtifactPaths(runPaths, "agent-1");
+    const baseReport = sampleReport(paths.reportPath);
+    const report = {
+      ...baseReport,
+      findings: [],
+      telemetry: {
+        ...baseReport.telemetry!,
+        manifestFindings: 0,
+      },
+    };
+    const summary = summarizeFindings({
+      runId: "run-1",
+      appName: "Demo",
+      mode: "cursor-cli",
+      agents: 1,
+      routesTested: 1,
+      reports: [report],
+    });
+    await writeFinalReport(runPaths, summary);
+
+    const finalText = await readFile(path.join(dir, "final-report.md"), "utf8");
+    expect(finalText).toContain("Issues found: 0");
+    expect(finalText).toContain(
+      "Outcome: All 1 route goal was covered by succeeded agent reports, and no application issues were reported.",
+    );
+    expect(finalText).toContain("## Route coverage");
+    expect(finalText).toContain("Goal: Test dashboard");
+    expect(finalText).toContain("Findings on path: 0 application, 0 tooling");
+    expect(finalText).toContain("No issues were reported.");
   });
 
   it("creates benchmark data for scalability charts", async () => {

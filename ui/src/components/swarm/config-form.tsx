@@ -115,6 +115,7 @@ function getConfigurationGuide(defaults: DefaultsResponse | null) {
       "This bundle describes a Cursor Browser Swarm validation run. Edit only the config section, then paste that config back into the UI or use it as the POST body shape for a run.",
     curationGuidance: [
       "Base scenarios on concrete product surfaces, routes, and acceptance criteria from the feature being validated.",
+      "For deterministic validation, include per-scenario seedRequirements, baselineAssertions, passCriteria, expectedOutOfScope, telemetryExpectations, and minimumFixture when those details are known.",
       "Do not invent browser tools, MCP servers, CLI flags, API routes, personas, modes, models, or dropdown values that are not listed in this guide.",
       "Prefer specific route goals over broad instructions. A good goal names the user journey, important states, and failure modes to inspect.",
       "Keep credentials out of copied config. The UI has a separate Credentials section for secrets.",
@@ -126,7 +127,7 @@ function getConfigurationGuide(defaults: DefaultsResponse | null) {
       appName:
         "Human-readable app name used in run labels and reports. It does not change browser behavior.",
       routes:
-        "Array of scenarios. Each item has path and goal. path should be a concrete app route like /dashboard. goal should explain what to validate on that route.",
+        "Array of scenarios. Each item has path and goal, with optional id, title, seedRequirements, baselineAssertions, passCriteria, expectedOutOfScope, telemetryExpectations, and minimumFixture for deterministic evidence.",
       instructions:
         "Global instructions every agent receives in addition to each route goal. Use this for auth notes, feature context, known risk areas, and what evidence to collect.",
       agents:
@@ -205,10 +206,14 @@ function getConfigurationGuide(defaults: DefaultsResponse | null) {
       {
         path: "/billing",
         goal: "Verify plan summary, invoice history, loading/empty/error states, and permission boundaries for non-admin users.",
+        id: "BILL-01",
+        baselineAssertions: ["Record invoice row count before applying filters."],
+        passCriteria: ["Pass only if the invoice table and summary totals remain consistent."],
       },
       {
         path: "/settings/team",
         goal: "Invite a teammate, validate form errors, refresh persistence, role changes, and audit for console/network failures.",
+        expectedOutOfScope: ["Email delivery is out of scope for this browser-only run."],
       },
     ],
   }
@@ -264,14 +269,86 @@ function normalizeStringArray(value: unknown, fallback: Array<string>) {
     : fallback
 }
 
+function normalizeTelemetryExpectations(value: unknown): RouteInput["telemetryExpectations"] {
+  if (!isRecord(value)) {
+    return undefined
+  }
+  const websocket =
+    value.websocket === "expected" ||
+    value.websocket === "silent" ||
+    value.websocket === "optional"
+      ? value.websocket
+      : undefined
+  const network =
+    value.network === "expected" ||
+    value.network === "silent" ||
+    value.network === "optional"
+      ? value.network
+      : undefined
+  return {
+    ...(websocket ? { websocket } : {}),
+    ...(network ? { network } : {}),
+    notes: normalizeStringArray(value.notes, []),
+  }
+}
+
+function normalizeFixtureFieldValue(value: unknown) {
+  return typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean" ||
+    value === null
+    ? value
+    : String(value)
+}
+
+function normalizeMinimumFixture(value: unknown): RouteInput["minimumFixture"] {
+  if (!isRecord(value) || !Array.isArray(value.rows)) {
+    return undefined
+  }
+  return {
+    description: normalizeString(value.description, ""),
+    rows: value.rows.filter(isRecord).map((row) => {
+      const rawFields = isRecord(row.fields) ? row.fields : {}
+      return {
+        id: normalizeString(row.id, ""),
+        label: normalizeString(row.label, "Fixture row"),
+        fields: Object.fromEntries(
+          Object.entries(rawFields).map(([key, fieldValue]) => [
+            key,
+            normalizeFixtureFieldValue(fieldValue),
+          ])
+        ),
+      }
+    }),
+    relationships: normalizeStringArray(value.relationships, []),
+    requiredCounts: isRecord(value.requiredCounts)
+      ? Object.fromEntries(
+          Object.entries(value.requiredCounts)
+            .filter((entry): entry is [string, number] => typeof entry[1] === "number")
+            .map(([key, count]) => [key, count])
+        )
+      : undefined,
+  }
+}
+
 function normalizeRoutes(value: unknown, fallback: Array<RouteInput>) {
   if (!Array.isArray(value)) return fallback
 
   const routes = value
     .filter(isRecord)
     .map((route) => ({
+      id: normalizeString(route.id, ""),
+      title: normalizeString(route.title, ""),
       path: normalizeString(route.path, ""),
       goal: normalizeString(route.goal, ""),
+      hints: normalizeStringArray(route.hints, []),
+      severityFocus: normalizeStringArray(route.severityFocus, []),
+      seedRequirements: normalizeStringArray(route.seedRequirements, []),
+      baselineAssertions: normalizeStringArray(route.baselineAssertions, []),
+      passCriteria: normalizeStringArray(route.passCriteria, []),
+      expectedOutOfScope: normalizeStringArray(route.expectedOutOfScope, []),
+      telemetryExpectations: normalizeTelemetryExpectations(route.telemetryExpectations),
+      minimumFixture: normalizeMinimumFixture(route.minimumFixture),
     }))
     .filter((route) => route.path || route.goal)
 

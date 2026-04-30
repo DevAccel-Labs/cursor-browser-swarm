@@ -9,6 +9,7 @@ function findingToMarkdown(finding: Finding, index: number): string {
     "1. No reproduction steps captured.";
   const likelyFiles = finding.likelyFiles.map((file) => `- ${file}`).join("\n") || "- unknown";
   const details = [
+    finding.findingKind ? `Type: ${finding.findingKind}` : undefined,
     finding.classification ? `Classification: ${finding.classification}` : undefined,
     finding.rootCauseKey ? `Root-cause group: ${finding.rootCauseKey}` : undefined,
     finding.observedBehavior ? `Observed behavior: ${finding.observedBehavior}` : undefined,

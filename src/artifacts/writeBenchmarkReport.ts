@@ -1,5 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { isReportableApplicationIssue, isToolingFinding } from "./findingFilters.js";
 import type { RunBenchmark, SwarmRunConfig, SwarmSummary } from "../types.js";
 
 export interface BenchmarkInstrumentation {
@@ -33,8 +34,8 @@ export function createRunBenchmark(input: {
   instrumentation: BenchmarkInstrumentation;
 }): RunBenchmark {
   const allFindings = input.summary.agentReports.flatMap((report) => report.findings);
-  const appFindings = allFindings.filter((finding) => finding.classification !== "tooling");
-  const toolingFindings = allFindings.filter((finding) => finding.classification === "tooling");
+  const appFindings = allFindings.filter(isReportableApplicationIssue);
+  const toolingFindings = allFindings.filter(isToolingFinding);
   return {
     run_id: input.summary.runId,
     config: {

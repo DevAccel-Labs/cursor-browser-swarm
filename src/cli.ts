@@ -40,7 +40,7 @@ program
   )
   .option(
     "--agent-personas <list>",
-    "Comma-separated built-in agent personas (balanced, destructive, security, realtime, accessibility, edge-inputs).",
+    "Comma-separated built-in agent personas (balanced, destructive, security, realtime, edge-inputs).",
   )
   .option(
     "--agent-directive <ID=INSTRUCTIONS>",

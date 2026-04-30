@@ -26,7 +26,33 @@ import type { UiRunState } from "../../lib/runs-store"
 interface RunRequest {
   appName: string
   baseUrl: string
-  routes: Array<{ path: string; goal: string; hints?: Array<string>; severityFocus?: Array<string> }>
+  routes: Array<{
+    id?: string
+    title?: string
+    path: string
+    goal: string
+    hints?: Array<string>
+    severityFocus?: Array<string>
+    seedRequirements?: Array<string>
+    baselineAssertions?: Array<string>
+    passCriteria?: Array<string>
+    expectedOutOfScope?: Array<string>
+    telemetryExpectations?: {
+      websocket?: "expected" | "silent" | "optional"
+      network?: "expected" | "silent" | "optional"
+      notes?: Array<string>
+    }
+    minimumFixture?: {
+      description?: string
+      rows: Array<{
+        id?: string
+        label: string
+        fields: Record<string, string | number | boolean | null>
+      }>
+      relationships?: Array<string>
+      requiredCounts?: Record<string, number>
+    }
+  }>
   instructions?: string
   secrets?: Array<{ key: string; value: string }>
   agents?: number | string
@@ -169,10 +195,18 @@ export default eventHandler(async (event: H3Event) => {
     appName: body.appName.trim() || "Browser App",
     baseUrl: body.baseUrl.trim(),
     routes: body.routes.map((r) => ({
+      ...(r.id?.trim() ? { id: r.id.trim() } : {}),
+      ...(r.title?.trim() ? { title: r.title.trim() } : {}),
       path: r.path.trim(),
       goal: r.goal.trim(),
       hints: r.hints?.filter(Boolean) ?? [],
       severityFocus: r.severityFocus?.length ? r.severityFocus : ["console", "network", "visual"],
+      seedRequirements: r.seedRequirements?.filter(Boolean) ?? [],
+      baselineAssertions: r.baselineAssertions?.filter(Boolean) ?? [],
+      passCriteria: r.passCriteria?.filter(Boolean) ?? [],
+      expectedOutOfScope: r.expectedOutOfScope?.filter(Boolean) ?? [],
+      ...(r.telemetryExpectations ? { telemetryExpectations: r.telemetryExpectations } : {}),
+      ...(r.minimumFixture ? { minimumFixture: r.minimumFixture } : {}),
     })),
   }
 

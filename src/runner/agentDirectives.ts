@@ -30,13 +30,6 @@ export const defaultAgentDirectives: AgentDirective[] = [
     allowDestructiveActions: false,
   },
   {
-    id: "accessibility",
-    label: "Accessibility and Keyboard UX",
-    instructions:
-      "Use keyboard-like flows, focus order, accessible names, modal/dropdown escape behavior, disabled states, and screen-reader-visible labels.",
-    allowDestructiveActions: false,
-  },
-  {
     id: "edge-inputs",
     label: "Edge Inputs and Validation",
     instructions:

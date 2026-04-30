@@ -57,6 +57,7 @@ describe("CLI evidence verifier", () => {
             {
               id: "F2",
               title: "Archived items accessible name collapses to count",
+              findingKind: "product-bug",
               classification: "root-cause-candidate",
               rootCauseKey: "archived-items-a11y",
               observedBehavior:
@@ -74,6 +75,7 @@ describe("CLI evidence verifier", () => {
             {
               id: "F3",
               description: "Card title remains in the add-card input after close and reopen.",
+              findingKind: "scenario-blocked",
               classification: "needs-clean-repro",
               needsCleanRepro: true,
               severity: "medium",
@@ -115,6 +117,7 @@ describe("CLI evidence verifier", () => {
       agentId: "agent-1",
       severity: "low",
       confidence: "high",
+      findingKind: "product-bug",
       classification: "root-cause-candidate",
       rootCauseKey: "archived-items-a11y",
       observedBehavior: "The archived-items control exposes only a count as its accessible name.",
@@ -127,6 +130,7 @@ describe("CLI evidence verifier", () => {
     });
     expect(findings[1]).toMatchObject({
       title: "Card title remains in the add-card input after close and reopen.",
+      findingKind: "scenario-blocked",
       classification: "needs-clean-repro",
       needsCleanRepro: true,
       severity: "medium",
@@ -161,6 +165,7 @@ describe("CLI evidence verifier", () => {
     });
 
     expect(result.status).not.toBe("verified");
+    expect(result.missingArtifactReferences).toEqual(["post-signin-dashboard.png"]);
     expect(result.notes.join("\n")).toContain("Missing referenced artifacts");
   });
 

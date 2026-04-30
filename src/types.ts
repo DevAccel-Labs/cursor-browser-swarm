@@ -23,11 +23,38 @@ export interface AgentDirective {
   allowDestructiveActions: boolean;
 }
 
+export interface MinimumFixtureRow {
+  id?: string | undefined;
+  label: string;
+  fields: Record<string, string | number | boolean | null>;
+}
+
+export interface MinimumFixture {
+  description?: string | undefined;
+  rows: MinimumFixtureRow[];
+  relationships?: string[] | undefined;
+  requiredCounts?: Record<string, number> | undefined;
+}
+
+export interface TelemetryExpectations {
+  websocket?: "expected" | "silent" | "optional" | undefined;
+  network?: "expected" | "silent" | "optional" | undefined;
+  notes?: string[] | undefined;
+}
+
 export interface RouteScenario {
+  id?: string | undefined;
+  title?: string | undefined;
   path: string;
   goal: string;
   hints: string[];
   severityFocus: SeverityFocus[];
+  seedRequirements?: string[] | undefined;
+  baselineAssertions?: string[] | undefined;
+  passCriteria?: string[] | undefined;
+  expectedOutOfScope?: string[] | undefined;
+  telemetryExpectations?: TelemetryExpectations | undefined;
+  minimumFixture?: MinimumFixture | undefined;
 }
 
 export interface RouteConfig {
@@ -223,10 +250,19 @@ export type FindingClassification =
   | "tooling"
   | "unknown";
 
+export type FindingKind =
+  | "scenario-failed"
+  | "scenario-blocked"
+  | "out-of-scope-observation"
+  | "harness-issue"
+  | "product-bug"
+  | "unknown";
+
 export interface Finding {
   title: string;
   route: string;
   agentId: string;
+  findingKind?: FindingKind;
   classification?: FindingClassification;
   rootCauseKey?: string;
   observedBehavior?: string;
@@ -324,6 +360,17 @@ export interface CreateRunInput {
   browserSession?: BrowserSession;
 }
 
+export interface EvidenceScenarioResult {
+  id: string;
+  title?: string;
+  status: "passed" | "failed" | "blocked" | "not-run";
+  baseline?: string;
+  fixtureStatus?: "met" | "missing" | "created" | "unknown";
+  evidence: string[];
+  notes?: string[];
+  blockedReason?: string;
+}
+
 export interface EvidenceManifestRoute {
   path: string;
   status: "passed" | "failed" | "blocked";
@@ -335,6 +382,7 @@ export interface EvidenceManifestRoute {
   realtimeChecked?: boolean;
   accessibilityChecked?: boolean;
   performanceChecked?: boolean;
+  scenarioResults?: EvidenceScenarioResult[];
   findings: Array<
     | string
     | {
@@ -342,6 +390,7 @@ export interface EvidenceManifestRoute {
         title?: string;
         summary?: string;
         description?: string;
+        findingKind?: FindingKind;
         classification?: FindingClassification;
         rootCauseKey?: string;
         observedBehavior?: string;

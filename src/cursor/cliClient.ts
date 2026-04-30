@@ -14,6 +14,7 @@ import type {
   CreateRunResult,
   EvidenceManifest,
   FindingClassification,
+  FindingKind,
   Finding,
   RunMode,
   RunStatus,
@@ -168,6 +169,44 @@ function normalizeClassification(value: unknown): FindingClassification {
   }
 }
 
+function normalizeFindingKind(value: unknown): FindingKind | undefined {
+  switch (value) {
+    case "scenario-failed":
+    case "scenario-blocked":
+    case "out-of-scope-observation":
+    case "harness-issue":
+    case "product-bug":
+    case "unknown":
+      return value;
+    default:
+      return undefined;
+  }
+}
+
+function classificationFromFindingKind(
+  findingKind: FindingKind | undefined,
+  fallback: FindingClassification,
+): FindingClassification {
+  switch (findingKind) {
+    case "product-bug":
+    case "scenario-failed":
+      return fallback === "unknown" ? "independent-bug" : fallback;
+    case "scenario-blocked":
+      return "needs-clean-repro";
+    case "out-of-scope-observation":
+      return "observability";
+    case "harness-issue":
+      return "tooling";
+    case "unknown":
+    case undefined:
+      return fallback;
+    default: {
+      const exhaustive: never = findingKind;
+      return exhaustive;
+    }
+  }
+}
+
 function asStringArray(value: unknown): string[] {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === "string" && item.length > 0)
@@ -195,7 +234,11 @@ function manifestToFindings(manifest: EvidenceManifest | undefined): Finding[] {
       const structuredEvidence = asStringArray(structured?.evidence);
       const reproSteps = asStringArray(structured?.reproSteps);
       const likelyFiles = asStringArray(structured?.likelyFiles);
-      const rawClassification = normalizeClassification(structured?.classification);
+      const findingKind = normalizeFindingKind(structured?.findingKind);
+      const rawClassification = classificationFromFindingKind(
+        findingKind,
+        normalizeClassification(structured?.classification),
+      );
       const rootCauseKey = asNonEmptyString(structured?.rootCauseKey);
       const observedBehavior = asNonEmptyString(structured?.observedBehavior);
       const inferredCause = asNonEmptyString(structured?.inferredCause);
@@ -212,6 +255,7 @@ function manifestToFindings(manifest: EvidenceManifest | undefined): Finding[] {
         title,
         route: route.path,
         agentId: manifest.agentId,
+        ...(findingKind ? { findingKind } : {}),
         classification,
         ...(rootCauseKey ? { rootCauseKey } : {}),
         ...(observedBehavior ? { observedBehavior } : {}),
@@ -453,6 +497,7 @@ async function verifyCliEvidence(input: {
   status: "verified" | "partial" | "missing";
   score: "strong" | "partial" | "weak";
   blockedReason?: string;
+  missingArtifactReferences: string[];
   notes: string[];
 }> {
   const reportText = (await fileExists(input.artifactPaths.reportPath))
@@ -552,6 +597,9 @@ async function verifyCliEvidence(input: {
         artifactPaths,
       }),
   );
+  const missingArtifactReferences = [
+    ...new Set([...missingManifestArtifacts, ...missingReferencedArtifacts]),
+  ];
   const hasExistingScreenshot =
     imageArtifacts.length > 0 &&
     (imageReferences.length === 0 || missingImageReferences.length === 0);
@@ -630,18 +678,20 @@ async function verifyCliEvidence(input: {
       status: passed >= 3 ? "partial" : "missing",
       score: "weak",
       ...(blockedReason ? { blockedReason } : {}),
+      missingArtifactReferences,
       notes: [`Agent reported blocked: ${blockedReason ?? "unknown reason"}.`, ...notes],
     };
   }
   if (passed === requiredChecks.length) {
     const score = hasFailedRequestReview && realtimeEvidenceStrong ? "strong" : "partial";
-    return { status: "verified", score, notes };
+    return { status: "verified", score, missingArtifactReferences, notes };
   }
   if (passed >= 3) {
     return {
       status: "partial",
       score: "partial",
       ...(blockedReason ? { blockedReason } : {}),
+      missingArtifactReferences,
       notes,
     };
   }
@@ -649,7 +699,35 @@ async function verifyCliEvidence(input: {
     status: "missing",
     score: "weak",
     ...(blockedReason ? { blockedReason } : {}),
+    missingArtifactReferences,
     notes,
+  };
+}
+
+function missingArtifactFinding(input: {
+  agentId: string;
+  route: string;
+  missingArtifactReferences: string[];
+}): Finding | undefined {
+  if (input.missingArtifactReferences.length === 0) {
+    return undefined;
+  }
+
+  return {
+    title: "Referenced evidence artifacts are missing",
+    route: input.route,
+    agentId: input.agentId,
+    classification: "tooling",
+    rootCauseKey: "missing-evidence-artifacts",
+    observedBehavior: `Agent evidence referenced artifact paths that do not exist: ${input.missingArtifactReferences.join(", ")}.`,
+    inferredCause:
+      "The agent report or evidence manifest points at files that were not written or were removed before verification.",
+    severity: "medium",
+    confidence: "high",
+    evidence: input.missingArtifactReferences,
+    reproSteps: ["Inspect the agent evidence manifest and referenced artifact paths."],
+    likelyFiles: ["src/cursor/cliClient.ts", "src/cursor/axiHelper.ts"],
+    fixStatus: "none",
   };
 }
 
@@ -926,6 +1004,12 @@ export class CliAgentClient implements AgentClient {
       });
       const manifest = await readEvidenceManifest(input.artifactPaths.evidenceManifestPath);
       const manifestFindings = manifestToFindings(manifest);
+      const artifactFinding = missingArtifactFinding({
+        agentId: input.agentId,
+        route: input.assignment.routes[0]?.path ?? manifest?.routes[0]?.path ?? "unknown",
+        missingArtifactReferences: verification.missingArtifactReferences,
+      });
+      const findings = artifactFinding ? [...manifestFindings, artifactFinding] : manifestFindings;
       const manifestInteractions = manifest
         ? manifest.routes.reduce((total, route) => total + route.interactions.length, 0)
         : 0;
@@ -981,7 +1065,7 @@ export class CliAgentClient implements AgentClient {
         agentId: input.agentId,
         repoPath: input.repoPath,
         assignment: input.assignment,
-        findings: manifestFindings,
+        findings,
         notes,
       });
       const report = makeCliReport({
@@ -992,7 +1076,7 @@ export class CliAgentClient implements AgentClient {
         status,
         evidenceStatus: verification.status,
         evidenceScore: verification.score,
-        findings: manifestFindings,
+        findings,
         telemetry,
         notes,
         ...(verification.blockedReason ? { blockedReason: verification.blockedReason } : {}),

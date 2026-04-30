@@ -9,10 +9,20 @@ const assignment: AgentAssignment = {
   directive: defaultAgentDirectives[1]!,
   routes: [
     {
+      id: "DASH-01",
+      title: "Dashboard filters",
       path: "/dashboard",
       goal: "Click dashboard filters.",
       hints: [],
       severityFocus: ["console", "network", "visual"],
+      seedRequirements: ["Need at least 3 visible rows before filtering."],
+      baselineAssertions: ["Before test: record visible row count."],
+      passCriteria: ["Pass only if the accessibility tree shows exactly 2 selected rows."],
+      expectedOutOfScope: ["Filters are not expected to survive a full reload."],
+      telemetryExpectations: {
+        websocket: "silent",
+        notes: ["Column filters should be local UI state."],
+      },
     },
   ],
 };
@@ -49,6 +59,12 @@ describe("buildMissionPrompt", () => {
     expect(prompt).toContain("destructive (Destructive Flow Breaker)");
     expect(prompt).toContain("Destructive actions allowed: yes");
     expect(prompt).toContain("1. /dashboard");
+    expect(prompt).toContain("Scenario ID: DASH-01");
+    expect(prompt).toContain("Seed/data requirements");
+    expect(prompt).toContain("Before test: record visible row count.");
+    expect(prompt).toContain("Pass/fail evidence criteria");
+    expect(prompt).toContain("Expected out-of-scope observations");
+    expect(prompt).toContain("WebSocket: silent");
     expect(prompt).toContain("Click dashboard filters.");
     expect(prompt).toContain("Evidence contract:");
     expect(prompt).toContain("/tmp/agent-1/screenshots");
@@ -83,6 +99,9 @@ describe("buildMissionPrompt", () => {
     expect(prompt).toContain("tooling");
     expect(prompt).toContain("realtime/WebSocket");
     expect(prompt).toContain("fixReadiness");
+    expect(prompt).toContain("findingKind");
+    expect(prompt).toContain("scenarioResults");
+    expect(prompt).toContain("Scenario results: include baseline");
     expect(prompt).toContain("debugHints");
     expect(prompt).toContain("The harness observes artifacts for progress");
     expect(prompt).toContain("SWARM_SECRET_EMAIL");

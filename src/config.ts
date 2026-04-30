@@ -22,7 +22,32 @@ const severityFocusSchema = z.enum([
   "performance",
 ]);
 
+const fixtureFieldValueSchema = z.union([z.string(), z.number(), z.boolean(), z.null()]);
+
+const minimumFixtureSchema = z.object({
+  description: z.string().min(1).optional(),
+  rows: z
+    .array(
+      z.object({
+        id: z.string().min(1).optional(),
+        label: z.string().min(1),
+        fields: z.record(z.string(), fixtureFieldValueSchema),
+      }),
+    )
+    .default([]),
+  relationships: z.array(z.string()).default([]),
+  requiredCounts: z.record(z.string(), z.number()).optional(),
+});
+
+const telemetryExpectationsSchema = z.object({
+  websocket: z.enum(["expected", "silent", "optional"]).optional(),
+  network: z.enum(["expected", "silent", "optional"]).optional(),
+  notes: z.array(z.string()).default([]),
+});
+
 const routeScenarioSchema = z.object({
+  id: z.string().min(1).optional(),
+  title: z.string().min(1).optional(),
   path: z
     .string()
     .min(1)
@@ -32,6 +57,12 @@ const routeScenarioSchema = z.object({
   goal: z.string().min(1),
   hints: z.array(z.string()).default([]),
   severityFocus: z.array(severityFocusSchema).default(["console", "network", "visual"]),
+  seedRequirements: z.array(z.string()).default([]),
+  baselineAssertions: z.array(z.string()).default([]),
+  passCriteria: z.array(z.string()).default([]),
+  expectedOutOfScope: z.array(z.string()).default([]),
+  telemetryExpectations: telemetryExpectationsSchema.optional(),
+  minimumFixture: minimumFixtureSchema.optional(),
 });
 
 const agentDirectiveSchema = z.object({

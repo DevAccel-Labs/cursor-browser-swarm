@@ -3,6 +3,7 @@ import type {
   BrowserSession,
   ChromeMode,
   ContextPacket,
+  RouteScenario,
   SwarmSecret,
 } from "../types.js";
 
@@ -129,11 +130,24 @@ function formatEvidenceManifestContract(input: MissionPromptInput): string {
       "failedRequestReview": "No failed requests, 4xx, or 5xx responses observed in the saved network artifact.",
       "accessibilityChecked": false,
       "performanceChecked": false,
+      "scenarioResults": [
+        {
+          "id": "TS-01",
+          "title": "Short scenario title",
+          "status": "passed" | "failed" | "blocked" | "not-run",
+          "baseline": "Before test: N visible rows / relevant starting state.",
+          "fixtureStatus": "met" | "missing" | "created" | "unknown",
+          "evidence": ["Screenshot, accessibility tree, DOM eval, network artifact, or console artifact proving the result."],
+          "notes": ["Only facts directly observed."],
+          "blockedReason": "Required fixture/data was missing."
+        }
+      ],
       "findings": [
         {
           "id": "F1",
           "title": "Short human-readable issue title",
           "summary": "One sentence describing what failed and why it matters.",
+          "findingKind": "scenario-failed" | "scenario-blocked" | "out-of-scope-observation" | "harness-issue" | "product-bug" | "unknown",
           "classification": "root-cause-candidate" | "downstream-symptom" | "independent-bug" | "needs-clean-repro" | "observability" | "tooling" | "unknown",
           "rootCauseKey": "stable-shared-root-cause-slug-or-empty",
           "observedBehavior": "Only facts you directly observed in the browser/artifacts.",
@@ -186,6 +200,72 @@ function formatCausalityRules(): string {
   ].join("\n");
 }
 
+function formatRouteDetailList(label: string, values: string[] | undefined): string | undefined {
+  if (!values || values.length === 0) {
+    return undefined;
+  }
+  return [`   ${label}:`, ...values.map((value) => `   - ${value}`)].join("\n");
+}
+
+function formatMinimumFixture(route: RouteScenario): string | undefined {
+  const fixture = route.minimumFixture;
+  if (!fixture) {
+    return undefined;
+  }
+  const lines = ["   Minimum fixture:"];
+  if (fixture.description) {
+    lines.push(`   - Description: ${fixture.description}`);
+  }
+  for (const row of fixture.rows) {
+    lines.push(`   - ${row.id ? `${row.id}: ` : ""}${row.label}: ${JSON.stringify(row.fields)}`);
+  }
+  if (fixture.relationships && fixture.relationships.length > 0) {
+    lines.push("   - Relationships:");
+    lines.push(...fixture.relationships.map((relationship) => `     - ${relationship}`));
+  }
+  if (fixture.requiredCounts) {
+    lines.push(`   - Required counts: ${JSON.stringify(fixture.requiredCounts)}`);
+  }
+  return lines.join("\n");
+}
+
+function formatTelemetryExpectations(route: RouteScenario): string | undefined {
+  const expectations = route.telemetryExpectations;
+  if (!expectations) {
+    return undefined;
+  }
+  const lines = ["   Telemetry expectations:"];
+  if (expectations.websocket) {
+    lines.push(`   - WebSocket: ${expectations.websocket}`);
+  }
+  if (expectations.network) {
+    lines.push(`   - Network: ${expectations.network}`);
+  }
+  if (expectations.notes && expectations.notes.length > 0) {
+    lines.push(...expectations.notes.map((note) => `   - ${note}`));
+  }
+  return lines.join("\n");
+}
+
+function formatRouteScenario(route: RouteScenario, index: number): string {
+  return [
+    `${index + 1}. ${route.path}`,
+    route.id ? `   Scenario ID: ${route.id}` : undefined,
+    route.title ? `   Title: ${route.title}` : undefined,
+    `   Goal: ${route.goal}`,
+    `   Focus: ${route.severityFocus.join(", ")}`,
+    formatRouteDetailList("Seed/data requirements", route.seedRequirements),
+    formatMinimumFixture(route),
+    formatRouteDetailList("Baseline assertions to record before action", route.baselineAssertions),
+    formatRouteDetailList("Pass/fail evidence criteria", route.passCriteria),
+    formatRouteDetailList("Expected out-of-scope observations", route.expectedOutOfScope),
+    formatTelemetryExpectations(route),
+    route.hints.length > 0 ? `   Hints: ${route.hints.join("; ")}` : undefined,
+  ]
+    .filter((line): line is string => Boolean(line))
+    .join("\n");
+}
+
 function formatRoutePlaybooks(input: MissionPromptInput): string {
   const focus = new Set(input.assignment.routes.flatMap((route) => route.severityFocus));
   const destructiveGuidance = input.assignment.directive.allowDestructiveActions
@@ -196,6 +276,10 @@ function formatRoutePlaybooks(input: MissionPromptInput): string {
     `- Stay within ${input.maxRouteSteps} meaningful interactions per route unless the operator instructions require more.`,
     "- Prefer realistic user journeys over shallow page-load checks: navigation, forms, empty states, loading states, modals, menus, filters, pagination, back/forward, refresh persistence, and error recovery.",
     "- For every route, identify the primary user intent and at least two secondary UI surfaces to exercise.",
+    "- Before each configured scenario, record the baseline state requested by the route contract, such as visible row count, selected row count, active filters, or route mode.",
+    "- If required fixture/data is missing and cannot be safely created within the allowed scope, mark the scenario blocked. Do not report a blocked scenario as a product bug.",
+    "- Pass/fail evidence criteria in the route contract override broad interpretation. Capture the exact screenshot, accessibility tree, DOM eval, or protocol artifact named by the criteria.",
+    "- Treat expected out-of-scope observations as notes, not findings. If telemetry is marked silent, do not flag missing network or WebSocket activity.",
     "- Check whether the page gives clear feedback after each action. Report confusing success/error states even if the app technically works.",
     destructiveGuidance,
   ];
@@ -221,7 +305,7 @@ function formatRoutePlaybooks(input: MissionPromptInput): string {
   }
   if (focus.has("network")) {
     playbooks.push(
-      "- Network focus: treat failed requests, unexpected 4xx/5xx responses, stalled critical requests, and missing realtime/WebSocket persistence signals as reportable findings.",
+      "- Network focus: treat failed requests, unexpected 4xx/5xx responses, and stalled critical requests as reportable findings. Only report missing realtime/WebSocket activity when the route contract says such telemetry is expected.",
     );
   }
   return playbooks.join("\n");
@@ -317,14 +401,7 @@ function formatContextPacket(packet: ContextPacket | undefined): string {
 }
 
 export function buildMissionPrompt(input: MissionPromptInput): string {
-  const routes = input.assignment.routes
-    .map(
-      (route, index) =>
-        `${index + 1}. ${route.path}\n   Goal: ${route.goal}\n   Focus: ${route.severityFocus.join(", ")}${
-          route.hints.length > 0 ? `\n   Hints: ${route.hints.join("; ")}` : ""
-        }`,
-    )
-    .join("\n");
+  const routes = input.assignment.routes.map(formatRouteScenario).join("\n");
 
   return `<cursor_browser_swarm_mission>
 You are a Cursor browser-validation agent. Your job is to validate live browser behavior with runtime evidence, not to infer success from code or descriptions.
@@ -404,6 +481,7 @@ ${formatContextPacket(input.contextPacket)}
 Report format:
 - Summary
 - Routes tested
+- Scenario results: include baseline, fixture status, pass/fail/blocked status, and exact evidence per scenario
 - Findings with severity/confidence
 - Evidence links using only existing artifact paths
 - Console/network notes

@@ -1,5 +1,8 @@
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { mergeBaseUrl, parseAgents, parseCliOptions } from "../src/config.js";
+import { loadRouteConfig, mergeBaseUrl, parseAgents, parseCliOptions } from "../src/config.js";
 import {
   parseCustomAgentDirective,
   resolveAgentDirectives,
@@ -89,5 +92,70 @@ describe("config", () => {
 
     expect(config.baseUrl).toBe("http://localhost:3000");
     expect(config.routes[0]?.severityFocus).toEqual(["console"]);
+  });
+
+  it("parses structured scenario contracts without requiring app-specific fields", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "swarm-config-"));
+    const routesPath = path.join(dir, "swarm.routes.json");
+    await writeFile(
+      routesPath,
+      `${JSON.stringify(
+        {
+          appName: "Demo",
+          baseUrl: "http://localhost:3000",
+          routes: [
+            {
+              id: "TS-12",
+              title: "Select visible filtered rows only",
+              path: "/plan",
+              goal: "Apply a filter and select all visible rows.",
+              seedRequirements: [
+                "Need at least 3 visible rows before filtering; exactly 2 should match.",
+              ],
+              baselineAssertions: ["Before test: record N visible rows."],
+              passCriteria: [
+                "Pass only if exactly 2 visible row checkboxes are selected and hidden rows remain unselected.",
+              ],
+              expectedOutOfScope: ["Column filters are not expected to emit WebSocket events."],
+              telemetryExpectations: {
+                websocket: "silent",
+                notes: ["UI-only local state should not require realtime frames."],
+              },
+              minimumFixture: {
+                rows: [
+                  {
+                    id: "row-1",
+                    label: "Owner Alice high priority",
+                    fields: { owner: "Alice", status: "In Progress", priority: "High" },
+                  },
+                ],
+                requiredCounts: { visibleRowsBeforeFilter: 3 },
+              },
+            },
+          ],
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    const config = await loadRouteConfig(routesPath);
+
+    expect(config.routes[0]).toMatchObject({
+      id: "TS-12",
+      title: "Select visible filtered rows only",
+      seedRequirements: [
+        "Need at least 3 visible rows before filtering; exactly 2 should match.",
+      ],
+      baselineAssertions: ["Before test: record N visible rows."],
+      passCriteria: [
+        "Pass only if exactly 2 visible row checkboxes are selected and hidden rows remain unselected.",
+      ],
+      expectedOutOfScope: ["Column filters are not expected to emit WebSocket events."],
+      telemetryExpectations: { websocket: "silent" },
+      minimumFixture: {
+        requiredCounts: { visibleRowsBeforeFilter: 3 },
+      },
+    });
   });
 });

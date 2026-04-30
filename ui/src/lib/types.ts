@@ -50,10 +50,31 @@ export interface RunPreviewResponse {
 }
 
 export interface RouteInput {
+  id?: string
+  title?: string
   path: string
   goal: string
   hints?: string[]
   severityFocus?: string[]
+  seedRequirements?: string[]
+  baselineAssertions?: string[]
+  passCriteria?: string[]
+  expectedOutOfScope?: string[]
+  telemetryExpectations?: {
+    websocket?: "expected" | "silent" | "optional"
+    network?: "expected" | "silent" | "optional"
+    notes?: string[]
+  }
+  minimumFixture?: {
+    description?: string
+    rows: Array<{
+      id?: string
+      label: string
+      fields: Record<string, string | number | boolean | null>
+    }>
+    relationships?: string[]
+    requiredCounts?: Record<string, number>
+  }
 }
 
 export interface SecretInput {

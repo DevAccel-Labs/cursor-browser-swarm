@@ -1,3 +1,4 @@
+import { isProductBug, isReportableApplicationIssue } from "./findingFilters.js";
 import type { AgentRunReport, SwarmSummary } from "../types.js";
 
 export function summarizeFindings(input: {
@@ -12,7 +13,8 @@ export function summarizeFindings(input: {
   reports: AgentRunReport[];
 }): SwarmSummary {
   const findings = input.reports.flatMap((report) => report.findings);
-  const appFindings = findings.filter((finding) => finding.classification !== "tooling");
+  const appFindings = findings.filter(isReportableApplicationIssue);
+  const productBugs = findings.filter(isProductBug);
 
   return {
     runId: input.runId,
@@ -24,8 +26,8 @@ export function summarizeFindings(input: {
     agents: input.agents,
     routesTested: input.routesTested,
     issuesFound: appFindings.length,
-    likelyRealBugs: appFindings.filter((finding) => finding.confidence === "high").length,
-    highConfidenceIssues: appFindings.filter((finding) => finding.confidence === "high").length,
+    likelyRealBugs: productBugs.filter((finding) => finding.confidence === "high").length,
+    highConfidenceIssues: productBugs.filter((finding) => finding.confidence === "high").length,
     agentReports: input.reports,
   };
 }
