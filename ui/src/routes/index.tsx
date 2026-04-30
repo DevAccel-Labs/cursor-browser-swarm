@@ -236,16 +236,16 @@ function SwarmDashboard() {
   return (
     <div className="flex h-svh flex-col">
       {/* Header */}
-      <header className="shrink-0 border-b bg-card px-6 py-4">
+      <header className="shrink-0 border-b bg-card px-5 py-3">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-primary">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-primary">
               Cursor Browser Swarm
             </p>
-            <h1 className="mt-1 text-2xl font-bold tracking-tight">
+            <h1 className="mt-0.5 text-xl font-bold tracking-tight">
               Launch browser-validation agents
             </h1>
-            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+            <p className="mt-0.5 hidden max-w-2xl text-xs text-muted-foreground sm:block">
               Point at a running app, describe the routes, choose the model, and let Cursor CLI
               agents validate with AXI browser tooling.
             </p>
@@ -276,7 +276,7 @@ function SwarmDashboard() {
         <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {activeView === "config" ? (
             <ScrollArea className="min-h-0 flex-1">
-              <div className="mx-auto max-w-4xl space-y-6 p-6">
+              <div className="mx-auto max-w-4xl space-y-4 p-5">
                 <ConfigForm
                   defaults={defaults}
                   isRunning={activeRunId !== null}

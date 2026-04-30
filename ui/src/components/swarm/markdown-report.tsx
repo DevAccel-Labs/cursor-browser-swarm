@@ -197,21 +197,21 @@ export function MarkdownReport({ markdown, className }: MarkdownReportProps) {
   return (
     <div
       className={cn(
-        "[&>*:first-child]:mt-0 [&>*+*]:mt-8",
+        "[&>*:first-child]:mt-0 [&>*+*]:mt-5",
         "prose prose-sm max-w-none text-foreground prose-headings:text-foreground prose-strong:text-foreground prose-p:leading-relaxed",
-        "prose-p:my-5",
+        "prose-p:my-3",
         "dark:prose-invert",
-        "prose-h1:mb-6 prose-h1:scroll-mt-20 prose-h1:pb-4 prose-h1:border-b prose-h1:border-border",
-        "prose-h2:mt-12 prose-h2:mb-4 prose-h2:scroll-mt-20 prose-h2:pt-2 prose-h2:border-b prose-h2:border-border/70 prose-h2:pb-2",
-        "prose-h3:mt-10 prose-h3:mb-3 prose-h3:scroll-mt-20",
-        "prose-h4:mt-8 prose-h4:mb-2",
+        "prose-h1:mb-4 prose-h1:text-xl prose-h1:scroll-mt-16 prose-h1:pb-2 prose-h1:border-b prose-h1:border-border",
+        "prose-h2:mt-6 prose-h2:mb-2 prose-h2:text-base prose-h2:scroll-mt-16 prose-h2:pt-1 prose-h2:border-b prose-h2:border-border/60 prose-h2:pb-1",
+        "prose-h3:mt-5 prose-h3:mb-2 prose-h3:text-sm prose-h3:scroll-mt-16",
+        "prose-h4:mt-4 prose-h4:mb-1.5",
         "prose-code:rounded-md prose-code:border prose-code:border-border prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:font-normal prose-code:text-foreground prose-code:break-all prose-code:before:content-none prose-code:after:content-none",
-        "prose-pre:bg-muted prose-pre:border prose-pre:border-border prose-pre:p-4 prose-pre:text-xs prose-pre:overflow-x-auto",
+        "prose-pre:bg-muted prose-pre:border prose-pre:border-border prose-pre:p-3 prose-pre:text-xs prose-pre:overflow-x-auto",
         "prose-a:text-primary prose-a:underline-offset-4 hover:prose-a:text-primary/90",
-        "prose-hr:my-10 prose-hr:border-border",
-        "prose-blockquote:my-6 prose-blockquote:border-border prose-blockquote:py-1",
-        "[&_ul]:my-5 [&_ol]:my-5 [&_ul>li+li]:mt-2.5 [&_ol>li+li]:mt-2.5 prose-li:marker:text-muted-foreground",
-        "prose-th:border prose-th:border-border prose-th:px-3 prose-th:py-2 prose-td:border prose-td:border-border prose-td:px-3 prose-td:py-2 prose-table:my-6",
+        "prose-hr:my-5 prose-hr:border-border",
+        "prose-blockquote:my-3 prose-blockquote:border-border prose-blockquote:py-1",
+        "[&_ul]:my-3 [&_ol]:my-3 [&_ul>li+li]:mt-1.5 [&_ol>li+li]:mt-1.5 prose-li:marker:text-muted-foreground",
+        "prose-th:border prose-th:border-border prose-th:px-2.5 prose-th:py-1.5 prose-td:border prose-td:border-border prose-td:px-2.5 prose-td:py-1.5 prose-table:my-4",
         className,
       )}
     >

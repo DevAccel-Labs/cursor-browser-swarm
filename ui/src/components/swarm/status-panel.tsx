@@ -91,14 +91,14 @@ function severityVariant(severity: string | undefined): "default" | "secondary" 
 
 function AgentFindingSummary({ finding }: { finding: AgentFindingPreview }) {
   return (
-    <div className="rounded-md border border-border/60 bg-background/50 p-3">
-      <div className="font-medium text-foreground">{finding.title}</div>
-      <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
-        {finding.route && <span>Route: {finding.route}</span>}
+    <div className="rounded-md border border-border/60 bg-background/50 px-3 py-2">
+      <div className="text-sm font-medium text-foreground">{finding.title}</div>
+      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+        {finding.route && <span>{finding.route}</span>}
         {finding.severity && (
-          <Badge variant={severityVariant(finding.severity)}>Severity: {finding.severity}</Badge>
+          <Badge variant={severityVariant(finding.severity)}>{finding.severity}</Badge>
         )}
-        {finding.confidence && <Badge variant="secondary">Confidence: {finding.confidence}</Badge>}
+        {finding.confidence && <Badge variant="secondary">{finding.confidence}</Badge>}
       </div>
     </div>
   )
@@ -111,48 +111,44 @@ function LiveReportPreview({ reports }: { reports: AgentReportPreview[] }) {
   )
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <Badge>Live preview</Badge>
-          <span className="text-sm font-medium">
-            {reports.length} {reports.length === 1 ? "agent has" : "agents have"} reported
-          </span>
-          <span className="text-sm text-muted-foreground">
-            {totalFindings} {totalFindings === 1 ? "finding" : "findings"} so far
-          </span>
-        </div>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Final report is still pending. These are completed agent reports as they arrive.
-        </p>
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-xs">
+        <Badge>Live preview</Badge>
+        <span className="font-medium">
+          {reports.length} {reports.length === 1 ? "agent" : "agents"} reported
+        </span>
+        <span className="text-muted-foreground">
+          {totalFindings} {totalFindings === 1 ? "finding" : "findings"}
+        </span>
+        <span className="text-muted-foreground">Final report pending</span>
       </div>
 
-      <div className="space-y-3">
+      <div className="space-y-2">
         {reports.map((agentReport) => (
           <Collapsible key={agentReport.agentId} defaultOpen>
-            <div className="rounded-lg border border-border/60 bg-muted/20">
+            <div className="rounded-md border border-border/60 bg-muted/20">
               <CollapsibleTrigger asChild>
                 <button
                   type="button"
-                  className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-muted/50"
+                  className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-muted/50"
                 >
-                  <div>
-                    <div className="font-medium">{agentReport.agentId}</div>
-                    <div className="text-xs text-muted-foreground">
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-medium">{agentReport.agentId}</span>
+                    <span className="text-xs text-muted-foreground">
                       {agentReport.findings.length === 0
-                        ? "No findings reported"
+                        ? "no findings"
                         : `${agentReport.findings.length} ${
                             agentReport.findings.length === 1 ? "finding" : "findings"
-                          } reported`}
-                    </div>
+                          }`}
+                    </span>
                   </div>
                   <ChevronDown className="size-4 text-muted-foreground transition-transform duration-200 [[data-state=open]_&]:rotate-180" />
                 </button>
               </CollapsibleTrigger>
               <CollapsibleContent>
-                <div className="space-y-4 border-t border-border/60 p-4">
+                <div className="space-y-3 border-t border-border/60 p-3">
                   {agentReport.findings.length > 0 ? (
-                    <div className="space-y-2">
+                    <div className="space-y-1.5">
                       {agentReport.findings.map((finding, index) => (
                         <AgentFindingSummary
                           key={`${agentReport.agentId}-${finding.title}-${index}`}
@@ -161,11 +157,11 @@ function LiveReportPreview({ reports }: { reports: AgentReportPreview[] }) {
                       ))}
                     </div>
                   ) : (
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-xs text-muted-foreground">
                       This agent completed without reporting any findings.
                     </p>
                   )}
-                  <div className="rounded-lg border border-border/60 bg-background px-5 py-6">
+                  <div className="rounded-md border border-border/60 bg-background px-4 py-3">
                     <MarkdownReport markdown={agentReport.markdown} />
                   </div>
                 </div>
@@ -216,53 +212,64 @@ export function StatusPanel({ runState, events, report, previewReports }: Status
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {/* Run Status */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Run Status</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {runState ? (
-            <pre className="overflow-auto rounded-md bg-muted p-3 text-xs">
-              {JSON.stringify({ ...runState, controller: undefined }, null, 2)}
-            </pre>
-          ) : (
-            <p className="text-sm text-muted-foreground">No run started.</p>
-          )}
-        </CardContent>
-      </Card>
+      <Collapsible>
+        <Card size="sm">
+          <CollapsibleTrigger asChild>
+            <CardHeader className="cursor-pointer pb-2 hover:bg-muted/50">
+              <div className="flex items-center justify-between">
+                <CardTitle>Run Status</CardTitle>
+                <ChevronDown className="size-4 text-muted-foreground transition-transform duration-200 [[data-state=open]_&]:rotate-180" />
+              </div>
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent>
+              {runState ? (
+                <pre className="overflow-auto rounded-md bg-muted p-2.5 text-xs">
+                  {JSON.stringify({ ...runState, controller: undefined }, null, 2)}
+                </pre>
+              ) : (
+                <p className="text-sm text-muted-foreground">No run started.</p>
+              )}
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
 
       {/* Agent Timeline */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Agent Timeline</CardTitle>
+      <Card size="sm">
+        <CardHeader>
+          <CardTitle>Agent Timeline</CardTitle>
         </CardHeader>
         <CardContent>
           {groupedEvents.size === 0 ? (
             <p className="text-sm text-muted-foreground">Agent activity will appear here.</p>
           ) : (
-            <ScrollArea className="h-64">
-              <div className="space-y-4">
+            <ScrollArea className="h-48">
+              <div className="space-y-3">
                 {Array.from(groupedEvents.entries()).map(([agentId, agentEvents]) => (
                   <div key={agentId}>
-                    <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-primary">
+                    <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-primary">
                       {agentId}
                     </div>
-                    <div className="space-y-2">
+                    <div className="space-y-1.5">
                       {agentEvents.map((event, idx) => (
-                        <div key={idx} className="flex items-start gap-3">
-                          <div className="mt-1.5 size-2 shrink-0 rounded-full bg-primary" />
+                        <div key={idx} className="flex items-start gap-2">
+                          <div className="mt-1.5 size-1.5 shrink-0 rounded-full bg-primary" />
                           <div className="min-w-0 flex-1">
-                            <div className="font-medium">{event.message || "Event"}</div>
-                            <div className="text-xs text-muted-foreground">
+                            <div className="text-sm font-medium">
+                              {event.message || "Event"}
+                            </div>
+                            <div className="text-[11px] text-muted-foreground">
                               {[
                                 event.sequence ? `#${event.sequence}` : "",
                                 formatTime(event.timestamp),
                                 event.context?.phase,
                               ]
                                 .filter(Boolean)
-                                .join(" | ")}
+                                .join(" · ")}
                             </div>
                           </div>
                         </div>
@@ -278,18 +285,18 @@ export function StatusPanel({ runState, events, report, previewReports }: Status
 
       {/* Raw Events */}
       <Collapsible>
-        <Card>
+        <Card size="sm">
           <CollapsibleTrigger asChild>
-            <CardHeader className="cursor-pointer pb-3 hover:bg-muted/50">
+            <CardHeader className="cursor-pointer pb-2 hover:bg-muted/50">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-base">Raw Events</CardTitle>
+                <CardTitle>Raw Events</CardTitle>
                 <ChevronDown className="size-4 text-muted-foreground transition-transform duration-200 [[data-state=open]_&]:rotate-180" />
               </div>
             </CardHeader>
           </CollapsibleTrigger>
           <CollapsibleContent>
             <CardContent>
-              <pre className="overflow-auto rounded-md bg-muted p-3 text-xs">
+              <pre className="overflow-auto rounded-md bg-muted p-2.5 text-xs">
                 {events || "Run events will stream here."}
               </pre>
             </CardContent>
@@ -299,10 +306,12 @@ export function StatusPanel({ runState, events, report, previewReports }: Status
 
       {/* Final Report */}
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-3 pb-3">
-          <div className="flex flex-wrap items-center gap-3">
-            <CardTitle className="text-base">Final Report</CardTitle>
-            {wallClock && <Badge variant="secondary">Wall clock: {wallClock}</Badge>}
+        <CardHeader className="flex flex-row items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <CardTitle>Final Report</CardTitle>
+            {wallClock && (
+              <span className="text-[11px] text-muted-foreground">· {wallClock}</span>
+            )}
           </div>
           {report && (
             <Button variant="outline" size="xs" onClick={copyFinalReport}>
@@ -315,20 +324,20 @@ export function StatusPanel({ runState, events, report, previewReports }: Status
                 ? "Copied"
                 : copyState === "failed"
                   ? "Copy failed"
-                  : "Copy report"}
+                  : "Copy"}
             </Button>
           )}
         </CardHeader>
         <CardContent className="pt-0">
           {report ? (
-            <div className="rounded-lg border border-border/60 bg-muted/25 px-5 py-8">
+            <div className="rounded-md border border-border/60 bg-muted/25 px-4 py-4">
               <MarkdownReport markdown={report} />
             </div>
           ) : previewReports.length > 0 ? (
             <LiveReportPreview reports={previewReports} />
           ) : (
-            <div className="rounded-lg border border-dashed border-border/60 px-5 py-10">
-              <p className="text-center text-sm text-muted-foreground">
+            <div className="rounded-md border border-dashed border-border/60 px-4 py-6">
+              <p className="text-center text-xs text-muted-foreground">
                 Report will appear after the run completes.
               </p>
             </div>

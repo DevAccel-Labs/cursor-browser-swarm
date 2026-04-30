@@ -781,8 +781,8 @@ export function ConfigForm({
 
       {isEditingJson && (
         <Card>
-          <CardHeader className="pb-4">
-            <CardTitle className="text-base">Raw Config</CardTitle>
+          <CardHeader>
+            <CardTitle>Raw Config</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <Textarea
@@ -826,8 +826,8 @@ export function ConfigForm({
         <>
           {/* Target Section */}
           <Card>
-            <CardHeader className="pb-4">
-              <CardTitle className="text-base">Target</CardTitle>
+            <CardHeader>
+              <CardTitle>Target</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
@@ -855,8 +855,8 @@ export function ConfigForm({
 
           {/* Scenarios Section */}
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-4">
-              <CardTitle className="text-base">Scenarios</CardTitle>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Scenarios</CardTitle>
               <Button
                 type="button"
                 variant="outline"
@@ -902,8 +902,8 @@ export function ConfigForm({
 
           {/* Instructions Section */}
           <Card>
-            <CardHeader className="pb-4">
-              <CardTitle className="text-base">Instructions</CardTitle>
+            <CardHeader>
+              <CardTitle>Instructions</CardTitle>
             </CardHeader>
             <CardContent>
               <Textarea
@@ -917,11 +917,11 @@ export function ConfigForm({
 
           {/* Credentials Section */}
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-4">
+            <CardHeader className="flex flex-row items-center justify-between">
               <div>
-                <CardTitle className="text-base">Credentials</CardTitle>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Values are passed to agent processes and redacted from output
+                <CardTitle>Credentials</CardTitle>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  Values passed to agent processes, redacted from output
                 </p>
               </div>
               <Button
@@ -974,10 +974,10 @@ export function ConfigForm({
 
           {/* Run Controls Section */}
           <Card>
-            <CardHeader className="pb-4">
-              <CardTitle className="text-base">Run Controls</CardTitle>
+            <CardHeader>
+              <CardTitle>Run Controls</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-6">
+            <CardContent className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <div className="space-y-2">
                   <Label htmlFor="agents">Agents</Label>
