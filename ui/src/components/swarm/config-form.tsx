@@ -52,6 +52,26 @@ type ShareableConfig = Omit<FormState, "secrets">
 const assignmentStrategyOptions = ["replicate", "split"]
 const modeOptions = ["cursor-cli", "copilot-cli", "custom-cli"]
 const chromeModeOptions = ["axi", "devtools-mcp"]
+const cursorFallbackModels = [{ id: "composer-2-fast", name: "Composer 2 Fast" }]
+const copilotFallbackModels = [
+  { id: "claude-sonnet-4.6", name: "Claude Sonnet 4.6" },
+  { id: "auto", name: "Auto" },
+  { id: "claude-haiku-4.5", name: "Claude Haiku 4.5" },
+  { id: "claude-opus-4.5", name: "Claude Opus 4.5" },
+  { id: "claude-opus-4.6", name: "Claude Opus 4.6" },
+  { id: "claude-opus-4.7", name: "Claude Opus 4.7" },
+  { id: "claude-sonnet-4", name: "Claude Sonnet 4" },
+  { id: "claude-sonnet-4.5", name: "Claude Sonnet 4.5" },
+  { id: "gpt-4.1", name: "GPT-4.1" },
+  { id: "gpt-5-mini", name: "GPT-5 mini" },
+  { id: "gpt-5.2", name: "GPT-5.2" },
+  { id: "gpt-5.2-codex", name: "GPT-5.2-Codex" },
+  { id: "gpt-5.3-codex", name: "GPT-5.3-Codex" },
+  { id: "gpt-5.4", name: "GPT-5.4" },
+  { id: "gpt-5.4-mini", name: "GPT-5.4 mini" },
+  { id: "gpt-5.5", name: "GPT-5.5" },
+]
+const genericFallbackModels = [{ id: "auto", name: "Auto" }]
 
 function getShareableConfig(formState: FormState): ShareableConfig {
   const { secrets: _secrets, ...config } = formState
@@ -71,6 +91,22 @@ function getConfiguredModelOptions(defaults: DefaultsResponse | null) {
     value: model.id,
     label: model.name,
   }))
+}
+
+function fallbackModelsForMode(mode: string) {
+  switch (mode) {
+    case "cursor-cli":
+      return cursorFallbackModels
+    case "copilot-cli":
+      return copilotFallbackModels
+    case "custom-cli":
+    default:
+      return genericFallbackModels
+  }
+}
+
+function fallbackModelForMode(mode: string) {
+  return fallbackModelsForMode(mode)[0]?.id ?? "auto"
 }
 
 function getConfigurationGuide(defaults: DefaultsResponse | null) {
@@ -314,6 +350,27 @@ function defaultCommandForMode(mode: string) {
   }
 }
 
+function provisionalDefaultsForMode(
+  mode: string,
+  command: string,
+  previous: DefaultsResponse | null
+): DefaultsResponse | null {
+  if (!previous) {
+    return previous
+  }
+  const models = fallbackModelsForMode(mode)
+  return {
+    ...previous,
+    mode,
+    model: models[0]?.id ?? "auto",
+    models,
+    modelSource: "fallback",
+    modelError: undefined,
+    agentCommand: command,
+    cursorCommand: command,
+  }
+}
+
 function validateRawConfig(
   config: Record<string, unknown>,
   merged: FormState,
@@ -549,6 +606,7 @@ export function ConfigForm({
   onSubmit,
   onCancel,
 }: ConfigFormProps) {
+  const [modelDefaults, setModelDefaults] = useState<DefaultsResponse | null>(defaults)
   const [formState, setFormState] = useState<FormState>(() => {
     const saved =
       typeof window !== "undefined"
@@ -601,6 +659,10 @@ export function ConfigForm({
   const [rawConfig, setRawConfig] = useState(() => formatConfig(formState))
 
   useEffect(() => {
+    setModelDefaults(defaults)
+  }, [defaults])
+
+  useEffect(() => {
     if (defaults && !localStorage.getItem("cursor-browser-swarm.ui.form")) {
       setFormState((prev) => ({
         ...prev,
@@ -619,6 +681,46 @@ export function ConfigForm({
       }))
     }
   }, [defaults])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    const timeoutId = window.setTimeout(() => {
+      const params = new URLSearchParams({
+        mode: formState.mode,
+        agentCommand: formState.agentCommand,
+      })
+      void fetch(`/api/defaults?${params.toString()}`, {
+        signal: controller.signal,
+      })
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error(`Defaults request failed with ${response.status}`)
+          }
+          return response.json() as Promise<DefaultsResponse>
+        })
+        .then((nextDefaults) => {
+          setModelDefaults(nextDefaults)
+          const nextModel = nextDefaults.models.some((model) => model.id === formState.model)
+            ? formState.model
+            : nextDefaults.model
+          setFormState((prev) => ({
+            ...prev,
+            model: nextModel,
+          }))
+        })
+        .catch((error) => {
+          if (error instanceof Error && error.name === "AbortError") {
+            return
+          }
+          toast.error("Failed to refresh models for selected CLI")
+        })
+    }, 300)
+
+    return () => {
+      controller.abort()
+      window.clearTimeout(timeoutId)
+    }
+  }, [formState.agentCommand, formState.mode, formState.model])
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -703,6 +805,8 @@ export function ConfigForm({
     }))
   }, [])
 
+  const activeDefaults = modelDefaults ?? defaults
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!isEditingJson) {
@@ -714,7 +818,7 @@ export function ConfigForm({
       const nextState = validateAndMergeConfigJson(
         rawConfig,
         formState,
-        defaults
+        activeDefaults
       )
       setFormState(nextState)
       onSubmit(nextState)
@@ -728,16 +832,16 @@ export function ConfigForm({
   const copyConfig = useCallback(async () => {
     try {
       const configToCopy = isEditingJson
-        ? validateAndMergeConfigJson(rawConfig, formState, defaults)
+        ? validateAndMergeConfigJson(rawConfig, formState, activeDefaults)
         : formState
       await navigator.clipboard.writeText(
-        formatClipboardConfig(configToCopy, defaults)
+        formatClipboardConfig(configToCopy, activeDefaults)
       )
       toast.success("Copied config")
     } catch {
       toast.error("Failed to copy config")
     }
-  }, [defaults, formState, isEditingJson, rawConfig])
+  }, [activeDefaults, formState, isEditingJson, rawConfig])
 
   const toggleJsonEditor = useCallback(() => {
     setRawConfig(formatConfig(formState))
@@ -749,7 +853,7 @@ export function ConfigForm({
       const nextState = validateAndMergeConfigJson(
         rawConfig,
         formState,
-        defaults
+        activeDefaults
       )
       setFormState(nextState)
       setIsEditingJson(false)
@@ -759,30 +863,30 @@ export function ConfigForm({
         error instanceof Error ? error.message : "Config must be valid JSON"
       )
     }
-  }, [defaults, formState, rawConfig])
+  }, [activeDefaults, formState, rawConfig])
 
   const previewState = useMemo(() => {
     if (!isEditingJson) return formState
 
     try {
-      return validateAndMergeConfigJson(rawConfig, formState, defaults)
+      return validateAndMergeConfigJson(rawConfig, formState, activeDefaults)
     } catch {
       return formState
     }
-  }, [defaults, formState, isEditingJson, rawConfig])
+  }, [activeDefaults, formState, isEditingJson, rawConfig])
 
   const rawConfigErrors = useMemo(() => {
     if (!isEditingJson) return []
 
     try {
-      validateAndMergeConfigJson(rawConfig, formState, defaults)
+      validateAndMergeConfigJson(rawConfig, formState, activeDefaults)
       return []
     } catch (error) {
       return error instanceof Error
         ? error.message.split("\n").filter(Boolean)
         : ["Config must be valid JSON"]
     }
-  }, [defaults, formState, isEditingJson, rawConfig])
+  }, [activeDefaults, formState, isEditingJson, rawConfig])
 
   const activeAgents =
     previewState.assignmentStrategy === "split"
@@ -1072,10 +1176,12 @@ export function ConfigForm({
                     value={formState.mode}
                     onValueChange={(v) => {
                       const command = defaultCommandForMode(v)
+                      setModelDefaults((prev) => provisionalDefaultsForMode(v, command, prev))
                       setFormState((prev) => ({
                         ...prev,
                         mode: v,
                         chromeMode: "axi",
+                        model: fallbackModelForMode(v),
                         agentCommand: command,
                         cursorCommand: command,
                       }))
@@ -1121,9 +1227,7 @@ export function ConfigForm({
                     </SelectTrigger>
                     <SelectContent>
                       {(
-                        defaults?.models ?? [
-                          { id: "composer-2-fast", name: "Composer 2 Fast" },
-                        ]
+                        activeDefaults?.models ?? fallbackModelsForMode(formState.mode)
                       ).map((m) => (
                         <SelectItem key={m.id} value={m.id}>
                           {m.id} - {m.name}

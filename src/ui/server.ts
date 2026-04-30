@@ -104,7 +104,7 @@ interface UiRunListItem {
 const uiRuns = new Map<string, UiRunState>();
 const runsRoot = path.join(homedir(), ".cursor-browser-swarm", "runs");
 
-const fallbackModels = [
+const cursorFallbackModels = [
   { id: "auto", name: "Auto" },
   { id: "composer-2-fast", name: "Composer 2 Fast" },
   { id: "composer-2", name: "Composer 2" },
@@ -113,6 +113,39 @@ const fallbackModels = [
   { id: "gpt-5.3-codex-high", name: "Codex 5.3 High" },
   { id: "gpt-5.2", name: "GPT-5.2" },
 ];
+
+const copilotFallbackModels = [
+  { id: "claude-sonnet-4.6", name: "Claude Sonnet 4.6" },
+  { id: "auto", name: "Auto" },
+  { id: "claude-haiku-4.5", name: "Claude Haiku 4.5" },
+  { id: "claude-opus-4.5", name: "Claude Opus 4.5" },
+  { id: "claude-opus-4.6", name: "Claude Opus 4.6" },
+  { id: "claude-opus-4.7", name: "Claude Opus 4.7" },
+  { id: "claude-sonnet-4", name: "Claude Sonnet 4" },
+  { id: "claude-sonnet-4.5", name: "Claude Sonnet 4.5" },
+  { id: "gpt-4.1", name: "GPT-4.1" },
+  { id: "gpt-5-mini", name: "GPT-5 mini" },
+  { id: "gpt-5.2", name: "GPT-5.2" },
+  { id: "gpt-5.2-codex", name: "GPT-5.2-Codex" },
+  { id: "gpt-5.3-codex", name: "GPT-5.3-Codex" },
+  { id: "gpt-5.4", name: "GPT-5.4" },
+  { id: "gpt-5.4-mini", name: "GPT-5.4 mini" },
+  { id: "gpt-5.5", name: "GPT-5.5" },
+];
+
+const genericFallbackModels = [{ id: "auto", name: "Auto" }];
+
+function fallbackModelsForMode(mode: string): { id: string; name: string }[] {
+  switch (mode) {
+    case "cursor-cli":
+      return cursorFallbackModels;
+    case "copilot-cli":
+      return copilotFallbackModels;
+    case "custom-cli":
+    default:
+      return genericFallbackModels;
+  }
+}
 
 function makeRunId(now = new Date()): string {
   return `ui-${now
@@ -248,29 +281,37 @@ function chooseDefaultModel(models: { id: string; name: string }[]): string {
   return (
     models.find((model) => /\(default\)/i.test(model.name))?.id ??
     models[0]?.id ??
-    "composer-2-fast"
+      "auto"
   );
 }
 
-async function listCursorModels(cursorCommand: string): Promise<{
+async function listAgentModels(mode: string, agentCommand: string): Promise<{
   models: { id: string; name: string }[];
-  source: "cursor-cli" | "fallback";
+  source: "agent-cli" | "cursor-cli" | "fallback";
   error?: string | undefined;
 }> {
+  const fallbackModels = fallbackModelsForMode(mode);
+  if (mode === "copilot-cli") {
+    return {
+      models: fallbackModels,
+      source: "fallback",
+      error: "Copilot CLI does not expose a model listing command; showing Copilot-safe defaults.",
+    };
+  }
   try {
-    const result = await execa(cursorCommand, ["--list-models"], {
+    const result = await execa(agentCommand, ["--list-models"], {
       reject: false,
       timeout: 10_000,
       all: true,
     });
     const models = parseModelOutput(result.all ?? "");
     if (result.exitCode === 0 && models.length > 0) {
-      return { models, source: "cursor-cli" };
+      return { models, source: "agent-cli" };
     }
     return {
       models: fallbackModels,
       source: "fallback",
-      error: result.all || `Cursor CLI exited with code ${result.exitCode}.`,
+      error: result.all || `${agentCommand} --list-models exited with code ${result.exitCode}.`,
     };
   } catch (error) {
     return {
@@ -616,7 +657,8 @@ async function handleApiRequest(
   if (request.method === "GET" && url.pathname === "/api/defaults") {
     const agentCommand =
       url.searchParams.get("agentCommand") ?? url.searchParams.get("cursorCommand") ?? "agent";
-    const modelResult = await listCursorModels(agentCommand);
+    const mode = url.searchParams.get("mode") ?? "cursor-cli";
+    const modelResult = await listAgentModels(mode, agentCommand);
     sendJson(response, 200, {
       baseUrl: "http://localhost:3000",
       appName: "My App",
@@ -631,7 +673,7 @@ async function handleApiRequest(
         allowDestructiveActions: directive.allowDestructiveActions,
       })),
       agentDirectives: "",
-      mode: "cursor-cli",
+      mode,
       chromeMode: "axi",
       model: chooseDefaultModel(modelResult.models),
       models: modelResult.models,

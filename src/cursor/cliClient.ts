@@ -682,6 +682,12 @@ function buildCliArgs(input: CreateRunInput): string[] {
       return args;
     }
     case "copilot-cli":
+      return [
+        "-p",
+        input.missionPrompt,
+        "--allow-all",
+        ...(input.model && input.model !== "auto" ? ["--model", input.model] : []),
+      ];
     case "custom-cli":
       return [input.missionPrompt];
     default: {
