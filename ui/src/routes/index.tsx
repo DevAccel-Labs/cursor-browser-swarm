@@ -9,6 +9,8 @@ import { ActivityView } from "@/components/swarm/activity-view"
 import { StatusPanel } from "@/components/swarm/status-panel"
 import type {
   DefaultsResponse,
+  AgentReportPreview,
+  RunPreviewResponse,
   UiRunListItem,
   UiRunState,
   FormState,
@@ -49,6 +51,7 @@ function SwarmDashboard() {
   const [currentRunState, setCurrentRunState] = useState<UiRunState | null>(null)
   const [events, setEvents] = useState("")
   const [report, setReport] = useState<string | null>(null)
+  const [previewReports, setPreviewReports] = useState<AgentReportPreview[]>([])
   const [isLoadingRuns, setIsLoadingRuns] = useState(false)
 
   // Load initial data
@@ -88,6 +91,11 @@ function SwarmDashboard() {
         ])
         setCurrentRunState(stateRes)
         setEvents(eventsRes)
+
+        const previewRes = (await fetch(
+          `/api/runs/${encodeURIComponent(selectedRunId)}/preview`
+        ).then((r) => (r.ok ? r.json() : { reports: [] }))) as RunPreviewResponse
+        setPreviewReports(previewRes.reports || [])
 
         if (stateRes.status === "succeeded" && stateRes.finalReportPath) {
           const reportRes = await fetch(
@@ -135,7 +143,7 @@ function SwarmDashboard() {
         if (pruned.length !== prev.length) savePinnedIds(pruned)
         return pruned
       })
-    } catch (error) {
+    } catch {
       toast.error("Failed to refresh runs")
     } finally {
       setIsLoadingRuns(false)
@@ -146,6 +154,7 @@ function SwarmDashboard() {
     setSelectedRunId(id)
     setReport(null)
     setEvents("")
+    setPreviewReports([])
     setCurrentRunState(null)
     localStorage.setItem(STORAGE_KEYS.selectedRun, id)
   }, [])
@@ -198,6 +207,7 @@ function SwarmDashboard() {
       localStorage.setItem(STORAGE_KEYS.activeRun, state.id)
       localStorage.setItem(STORAGE_KEYS.selectedRun, state.id)
       setCurrentRunState(state)
+      setPreviewReports([])
       refreshRuns()
     } catch (error) {
       toast.error("Failed to start run")
@@ -218,7 +228,7 @@ function SwarmDashboard() {
       setActiveRunId(null)
       localStorage.removeItem(STORAGE_KEYS.activeRun)
       refreshRuns()
-    } catch (error) {
+    } catch {
       toast.error("Failed to cancel run")
     }
   }, [activeRunId, refreshRuns])
@@ -273,7 +283,12 @@ function SwarmDashboard() {
                   onSubmit={handleSubmit}
                   onCancel={handleCancel}
                 />
-                <StatusPanel runState={currentRunState} events={events} report={report} />
+                <StatusPanel
+                  runState={currentRunState}
+                  events={events}
+                  report={report}
+                  previewReports={previewReports}
+                />
               </div>
             </ScrollArea>
           ) : (

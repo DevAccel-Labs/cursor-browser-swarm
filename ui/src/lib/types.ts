@@ -30,6 +30,25 @@ export interface UiRunState {
   error?: string
 }
 
+export interface AgentFindingPreview {
+  title: string
+  route?: string
+  severity?: string
+  confidence?: string
+}
+
+export interface AgentReportPreview {
+  agentId: string
+  reportPath: string
+  markdown: string
+  findings: AgentFindingPreview[]
+}
+
+export interface RunPreviewResponse {
+  runId: string
+  reports: AgentReportPreview[]
+}
+
 export interface RouteInput {
   path: string
   goal: string

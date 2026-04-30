@@ -35,8 +35,25 @@ export interface UiRunListItem {
   issuesFound?: number
 }
 
+export interface AgentFindingPreview {
+  title: string
+  route?: string
+  severity?: string
+  confidence?: string
+}
+
+export interface AgentReportPreview {
+  agentId: string
+  reportPath: string
+  markdown: string
+  findings: AgentFindingPreview[]
+}
+
 const uiRuns = new Map<string, UiRunState>()
 const runsRoot = path.join(homedir(), ".cursor-browser-swarm", "runs")
+const FINDINGS_HEADING_PATTERN = /^##\s+Findings\b/im
+const NEXT_H2_PATTERN = /\n##\s+/m
+const FINDING_HEADING_PATTERN = /^###\s+\d+\.\s+(.+)$/gm
 
 async function fileExists(filePath: string): Promise<boolean> {
   try {
@@ -69,6 +86,41 @@ function runListSortTimeMs(run: { id: string; startedAt?: string }): number {
     if (!Number.isNaN(fromIso)) return fromIso
   }
   return timestampFromUiStyleRunId(run.id) ?? 0
+}
+
+function readLabel(block: string, label: string): string | undefined {
+  const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  const match = new RegExp(`^${escapedLabel}:\\s*(.+)$`, "im").exec(block)
+  return match?.[1]?.trim()
+}
+
+function parseFindingPreviews(markdown: string): AgentFindingPreview[] {
+  const headingMatch = markdown.match(FINDINGS_HEADING_PATTERN)
+  if (!headingMatch || headingMatch.index === undefined) {
+    return []
+  }
+
+  const headingEnd = headingMatch.index + headingMatch[0].length
+  const rest = markdown.slice(headingEnd)
+  const nextHeadingMatch = rest.match(NEXT_H2_PATTERN)
+  const findingsBody =
+    nextHeadingMatch?.index === undefined ? rest : rest.slice(0, nextHeadingMatch.index)
+  const matches = [...findingsBody.matchAll(FINDING_HEADING_PATTERN)]
+
+  return matches.map((match, index) => {
+    const blockStart = (match.index ?? 0) + match[0].length
+    const nextMatch = matches[index + 1]
+    const blockEnd = nextMatch?.index ?? findingsBody.length
+    const block = findingsBody.slice(blockStart, blockEnd)
+    const title = match[1].trim()
+
+    return {
+      title,
+      route: readLabel(block, "Route"),
+      severity: readLabel(block, "Severity"),
+      confidence: readLabel(block, "Confidence"),
+    }
+  })
 }
 
 async function listDiskRuns(): Promise<UiRunListItem[]> {
@@ -198,6 +250,39 @@ class RunsStore {
       return await readFile(state.finalReportPath, "utf8")
     } catch {
       return undefined
+    }
+  }
+
+  async getAgentReportPreviews(runId: string): Promise<AgentReportPreview[]> {
+    const state = await this.getRunStateOrDisk(runId)
+    if (!state) return []
+
+    try {
+      const agentsDir = path.join(state.outDir, "agents")
+      const agents = await readdir(agentsDir, { withFileTypes: true })
+      const reports = await Promise.all(
+        agents
+          .filter((agent) => agent.isDirectory())
+          .sort((left, right) => left.name.localeCompare(right.name, undefined, { numeric: true }))
+          .map(async (agent) => {
+            const reportPath = path.join(agentsDir, agent.name, "report.md")
+            try {
+              const markdown = await readFile(reportPath, "utf8")
+              return {
+                agentId: agent.name,
+                reportPath,
+                markdown,
+                findings: parseFindingPreviews(markdown),
+              }
+            } catch {
+              return undefined
+            }
+          })
+      )
+
+      return reports.filter((report): report is AgentReportPreview => report !== undefined)
+    } catch {
+      return []
     }
   }
 

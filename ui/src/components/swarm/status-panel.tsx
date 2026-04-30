@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react"
 import { Check, ChevronDown, Clipboard } from "lucide-react"
-import type { SwarmEvent, UiRunState } from "@/lib/types"
+import type { AgentFindingPreview, AgentReportPreview, SwarmEvent, UiRunState } from "@/lib/types"
 import { MarkdownReport } from "@/components/swarm/markdown-report"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
@@ -11,6 +12,7 @@ interface StatusPanelProps {
   runState: UiRunState | null
   events: string
   report: string | null
+  previewReports: AgentReportPreview[]
 }
 
 function formatTime(timestamp?: string): string {
@@ -41,9 +43,7 @@ interface TimelineEvent extends SwarmEvent {
   sequence: number
 }
 
-function groupEventsByAgent(
-  events: Array<SwarmEvent>
-): Map<string, Array<TimelineEvent>> {
+function groupEventsByAgent(events: Array<SwarmEvent>): Map<string, Array<TimelineEvent>> {
   const grouped = new Map<string, Array<TimelineEvent>>()
 
   for (const event of events) {
@@ -66,7 +66,102 @@ function groupEventsByAgent(
   return grouped
 }
 
-export function StatusPanel({ runState, events, report }: StatusPanelProps) {
+function severityVariant(severity: string | undefined): "default" | "secondary" | "destructive" {
+  if (severity === "high") return "destructive"
+  if (severity === "medium" || severity === "low") return "secondary"
+  return "default"
+}
+
+function AgentFindingSummary({ finding }: { finding: AgentFindingPreview }) {
+  return (
+    <div className="rounded-md border border-border/60 bg-background/50 p-3">
+      <div className="font-medium text-foreground">{finding.title}</div>
+      <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
+        {finding.route && <span>Route: {finding.route}</span>}
+        {finding.severity && (
+          <Badge variant={severityVariant(finding.severity)}>Severity: {finding.severity}</Badge>
+        )}
+        {finding.confidence && <Badge variant="secondary">Confidence: {finding.confidence}</Badge>}
+      </div>
+    </div>
+  )
+}
+
+function LiveReportPreview({ reports }: { reports: AgentReportPreview[] }) {
+  const totalFindings = reports.reduce(
+    (count, agentReport) => count + agentReport.findings.length,
+    0,
+  )
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <Badge>Live preview</Badge>
+          <span className="text-sm font-medium">
+            {reports.length} {reports.length === 1 ? "agent has" : "agents have"} reported
+          </span>
+          <span className="text-sm text-muted-foreground">
+            {totalFindings} {totalFindings === 1 ? "finding" : "findings"} so far
+          </span>
+        </div>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Final report is still pending. These are completed agent reports as they arrive.
+        </p>
+      </div>
+
+      <div className="space-y-3">
+        {reports.map((agentReport) => (
+          <Collapsible key={agentReport.agentId} defaultOpen>
+            <div className="rounded-lg border border-border/60 bg-muted/20">
+              <CollapsibleTrigger asChild>
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-muted/50"
+                >
+                  <div>
+                    <div className="font-medium">{agentReport.agentId}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {agentReport.findings.length === 0
+                        ? "No findings reported"
+                        : `${agentReport.findings.length} ${
+                            agentReport.findings.length === 1 ? "finding" : "findings"
+                          } reported`}
+                    </div>
+                  </div>
+                  <ChevronDown className="size-4 text-muted-foreground transition-transform duration-200 [[data-state=open]_&]:rotate-180" />
+                </button>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="space-y-4 border-t border-border/60 p-4">
+                  {agentReport.findings.length > 0 ? (
+                    <div className="space-y-2">
+                      {agentReport.findings.map((finding, index) => (
+                        <AgentFindingSummary
+                          key={`${agentReport.agentId}-${finding.title}-${index}`}
+                          finding={finding}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      This agent completed without reporting any findings.
+                    </p>
+                  )}
+                  <div className="rounded-lg border border-border/60 bg-background px-5 py-6">
+                    <MarkdownReport markdown={agentReport.markdown} />
+                  </div>
+                </div>
+              </CollapsibleContent>
+            </div>
+          </Collapsible>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+export function StatusPanel({ runState, events, report, previewReports }: StatusPanelProps) {
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle")
   const parsedEvents = useMemo(() => parseEvents(events), [events])
   const groupedEvents = useMemo(() => groupEventsByAgent(parsedEvents), [parsedEvents])
@@ -94,11 +189,7 @@ export function StatusPanel({ runState, events, report }: StatusPanelProps) {
         <CardContent>
           {runState ? (
             <pre className="overflow-auto rounded-md bg-muted p-3 text-xs">
-              {JSON.stringify(
-                { ...runState, controller: undefined },
-                null,
-                2
-              )}
+              {JSON.stringify({ ...runState, controller: undefined }, null, 2)}
             </pre>
           ) : (
             <p className="text-sm text-muted-foreground">No run started.</p>
@@ -194,6 +285,8 @@ export function StatusPanel({ runState, events, report }: StatusPanelProps) {
             <div className="rounded-lg border border-border/60 bg-muted/25 px-5 py-8">
               <MarkdownReport markdown={report} />
             </div>
+          ) : previewReports.length > 0 ? (
+            <LiveReportPreview reports={previewReports} />
           ) : (
             <div className="rounded-lg border border-dashed border-border/60 px-5 py-10">
               <p className="text-center text-sm text-muted-foreground">
